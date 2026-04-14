@@ -5,10 +5,10 @@ use crossterm::{
 };
 use ratatui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    text::{Line, Span},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
     Terminal,
 };
 use std::{
@@ -19,10 +19,12 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    io::{AsyncBufReadExt, BufReader},
+    io::{AsyncRead, AsyncReadExt},
     process::Command,
-    sync::{mpsc, Mutex},
+    sync::Mutex,
 };
+
+const MAX_TASK_LOGS: usize = 1000;
 
 #[derive(Debug, Clone, PartialEq)]
 enum TaskStatus {
@@ -86,6 +88,162 @@ impl App {
         } else {
             self.selected_task = tasks_len - 1;
         }
+    }
+}
+
+fn push_log_line(task: &mut Task, line: String) {
+    let Some(line) = normalize_log_line(&line) else {
+        return;
+    };
+
+    task.logs.push(line);
+    if task.logs.len() > MAX_TASK_LOGS {
+        task.logs.remove(0);
+    }
+}
+
+fn format_logs_for_panel(logs: &[String], panel_height: u16) -> String {
+    let visible_lines = panel_height.saturating_sub(2) as usize;
+
+    if visible_lines == 0 {
+        return String::new();
+    }
+
+    logs.iter()
+        .rev()
+        .take(visible_lines)
+        .rev()
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn normalize_log_line(line: &str) -> Option<String> {
+    let line = strip_ansi_sequences(line);
+    let line = strip_time_prefix(&line);
+    let line = line.trim();
+
+    if line.is_empty() {
+        None
+    } else {
+        Some(line.to_string())
+    }
+}
+
+fn strip_ansi_sequences(input: &str) -> String {
+    let mut cleaned = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            if matches!(chars.peek(), Some('[')) {
+                chars.next();
+                while let Some(next) = chars.next() {
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+
+        cleaned.push(ch);
+    }
+
+    cleaned
+}
+
+fn strip_time_prefix(input: &str) -> String {
+    let trimmed = input.trim_start();
+
+    if let Some(rest) = strip_bracketed_timestamp(trimmed) {
+        return rest.to_string();
+    }
+
+    if let Some((token, rest)) = trimmed.split_once(char::is_whitespace) {
+        if looks_like_timestamp(token) {
+            return rest.trim_start_matches(|c: char| c.is_whitespace() || c == '-' || c == '|').to_string();
+        }
+    }
+
+    trimmed.to_string()
+}
+
+fn strip_bracketed_timestamp(input: &str) -> Option<&str> {
+    let rest = input.strip_prefix('[')?;
+    let end = rest.find(']')?;
+    let token = &rest[..end];
+
+    if looks_like_timestamp(token) {
+        Some(rest[end + 1..].trim_start_matches(|c: char| c.is_whitespace() || c == '-' || c == '|'))
+    } else {
+        None
+    }
+}
+
+fn looks_like_timestamp(token: &str) -> bool {
+    let token = token.trim();
+    let colon_count = token.chars().filter(|ch| *ch == ':').count();
+    let digit_count = token.chars().filter(|ch| ch.is_ascii_digit()).count();
+
+    colon_count >= 1
+        && digit_count >= 4
+        && token
+            .chars()
+            .all(|ch| ch.is_ascii_digit() || matches!(ch, ':' | '.' | '-' | 'T' | 'Z' | '+' | ' '))
+}
+
+fn drain_log_lines(buffer: &mut String) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut start = 0;
+
+    for (index, ch) in buffer.char_indices() {
+        if ch == '\n' || ch == '\r' {
+            lines.push(buffer[start..index].to_string());
+            start = index + ch.len_utf8();
+        }
+    }
+
+    *buffer = buffer[start..].to_string();
+    lines
+}
+
+async fn append_task_log(tasks_ref: &Arc<Mutex<Vec<Task>>>, id: usize, line: impl Into<String>) {
+    let mut tasks = tasks_ref.lock().await;
+    if let Some(task) = tasks.iter_mut().find(|task| task.id == id) {
+        push_log_line(task, line.into());
+    }
+}
+
+async fn stream_task_output<R>(id: usize, mut reader: R, tasks_ref: Arc<Mutex<Vec<Task>>>)
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    let mut bytes = [0; 1024];
+    let mut buffer = String::new();
+
+    loop {
+        let read = match reader.read(&mut bytes).await {
+            Ok(read) => read,
+            Err(err) => {
+                append_task_log(&tasks_ref, id, format!("Failed to read Junie output: {err}")).await;
+                return;
+            }
+        };
+
+        if read == 0 {
+            break;
+        }
+
+        buffer.push_str(&String::from_utf8_lossy(&bytes[..read]));
+
+        for line in drain_log_lines(&mut buffer) {
+            append_task_log(&tasks_ref, id, line).await;
+        }
+    }
+
+    if !buffer.is_empty() {
+        append_task_log(&tasks_ref, id, buffer).await;
     }
 }
 
@@ -277,7 +435,7 @@ async fn run_agent_task(id: usize, prompt: String, branch_name: String, worktree
     let log = |msg: String| async {
         let mut tasks = tasks_ref.lock().await;
         if let Some(task) = tasks.iter_mut().find(|t| t.id == id) {
-            task.logs.push(msg);
+            push_log_line(task, msg);
         }
     };
 
@@ -306,7 +464,7 @@ async fn run_agent_task(id: usize, prompt: String, branch_name: String, worktree
     log("Spawning Junie agent...".to_string()).await;
     
     // Spawn agent process (headless junie)
-    let mut child = Command::new("junie")
+    let child = Command::new("junie")
         .arg(&prompt)
         .current_dir(&worktree_path)
         .stdout(Stdio::piped())
@@ -317,21 +475,8 @@ async fn run_agent_task(id: usize, prompt: String, branch_name: String, worktree
         let stdout = child_proc.stdout.take().unwrap();
         let stderr = child_proc.stderr.take().unwrap();
 
-        let mut reader = BufReader::new(stdout).lines();
-        let mut err_reader = BufReader::new(stderr).lines();
-
-        let tasks_clone = Arc::clone(&tasks_ref);
-        let log_loop = tokio::spawn(async move {
-            while let Ok(Some(line)) = reader.next_line().await {
-                let mut tasks = tasks_clone.lock().await;
-                if let Some(task) = tasks.iter_mut().find(|t| t.id == id) {
-                    task.logs.push(line);
-                    if task.logs.len() > 1000 {
-                        task.logs.remove(0);
-                    }
-                }
-            }
-        });
+        let stdout_loop = tokio::spawn(stream_task_output(id, stdout, Arc::clone(&tasks_ref)));
+        let stderr_loop = tokio::spawn(stream_task_output(id, stderr, Arc::clone(&tasks_ref)));
 
         // Spawn periodic diff updater
         let tasks_clone2 = Arc::clone(&tasks_ref);
@@ -339,7 +484,7 @@ async fn run_agent_task(id: usize, prompt: String, branch_name: String, worktree
         let diff_loop = tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(2)).await;
-                let mut tasks = tasks_clone2.lock().await;
+                let tasks = tasks_clone2.lock().await;
                 let status = tasks.iter().find(|t| t.id == id).map(|t| t.status.clone());
                 drop(tasks);
                 
@@ -364,10 +509,26 @@ async fn run_agent_task(id: usize, prompt: String, branch_name: String, worktree
         });
 
         let status = child_proc.wait().await;
-        let _ = log_loop.await;
-        
-        log(format!("Agent finished with status {:?}", status)).await;
-        update_status(TaskStatus::NeedsApproval).await;
+        let _ = stdout_loop.await;
+        let _ = stderr_loop.await;
+        let _ = diff_loop.await;
+
+        match status {
+            Ok(exit_status) => {
+                log(format!("Agent finished with status {exit_status}"))
+                    .await;
+
+                if exit_status.success() {
+                    update_status(TaskStatus::NeedsApproval).await;
+                } else {
+                    update_status(TaskStatus::Failed).await;
+                }
+            }
+            Err(err) => {
+                log(format!("Failed while waiting for Junie: {err}")).await;
+                update_status(TaskStatus::Failed).await;
+            }
+        }
     } else {
         log("Failed to spawn Junie process".to_string()).await;
         update_status(TaskStatus::Failed).await;
@@ -443,7 +604,7 @@ fn ui(f: &mut ratatui::Frame, app: &App, tasks: &[Task]) {
         .split(main_chunks[1]);
 
     let (logs_text, diff_text, status_msg) = if let Some(task) = tasks.get(app.selected_task) {
-        let logs = task.logs.iter().rev().take(20).rev().cloned().collect::<Vec<_>>().join("\n");
+        let logs = format_logs_for_panel(&task.logs, right_chunks[0].height);
         let status = match task.status {
             TaskStatus::NeedsApproval => "Agent finished. Press 'y' to merge.",
             TaskStatus::Running => "Agent is working...",
@@ -482,5 +643,49 @@ fn ui(f: &mut ratatui::Frame, app: &App, tasks: &[Task]) {
             f.render_widget(input_panel, chunks[2]);
             // Not setting cursor position to keep it simple, but we could
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_logs_for_panel_keeps_latest_lines_that_fit() {
+        let logs = (1..=6).map(|n| format!("line {n}")).collect::<Vec<_>>();
+
+        let visible = format_logs_for_panel(&logs, 5);
+
+        assert_eq!(visible, "line 4\nline 5\nline 6");
+    }
+
+    #[test]
+    fn push_log_line_removes_time_prefixes() {
+        let mut task = Task {
+            id: 1,
+            prompt: String::new(),
+            branch_name: String::new(),
+            worktree_path: String::new(),
+            status: TaskStatus::Running,
+            logs: Vec::new(),
+            diff: String::new(),
+        };
+
+        push_log_line(&mut task, "12:34:56 working on task".to_string());
+
+        assert_eq!(task.logs, vec!["working on task"]);
+    }
+
+    #[test]
+    fn drain_log_lines_handles_carriage_return_updates() {
+        let mut buffer = "[12:00:00] first\r12:00:01 second\rdone".to_string();
+
+        let drained = drain_log_lines(&mut buffer)
+            .into_iter()
+            .filter_map(|line| normalize_log_line(&line))
+            .collect::<Vec<_>>();
+
+        assert_eq!(drained, vec!["first", "second"]);
+        assert_eq!(buffer, "done");
     }
 }
