@@ -2,6 +2,8 @@
 name = "junie"
 version = "0.1.0"
 edition = "2024"
+description = "Small TUI app to run Junie tasks in git worktrees"
+readme = "README.md"
 
 [dependencies]
 crossterm = "0.29.0"
