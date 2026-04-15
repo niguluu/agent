@@ -2,7 +2,7 @@
 
 A small terminal app for running many headless Junie tasks at once.
 
-It starts each task in its own Git worktree and branch, shows live agent output, and auto merges finished work.
+It lets you queue prompts, starts each task in its own Git worktree and branch, shows live agent output and diffs, recovers old task worktrees on open, and auto merges finished work back into your current branch.
 
 The crate name is `junie`. Running `cargo run` starts the TUI app.
 
@@ -10,10 +10,11 @@ The crate name is `junie`. Running `cargo run` starts the TUI app.
 
 The app gives you one place to:
 
-- **Headless Multi-Agent Factory:** Queue tasks by providing prompts. The orchestrator automatically creates a new Git worktree and branch (`task-<id>`) for each task.
+- **Headless Multi-Agent Factory:** Queue tasks by providing prompts. The orchestrator automatically creates a new Git worktree and branch (`agent/task-<id>`) for each task.
 - **Live Monitoring:** Monitor each agent's logs, thoughts, and live code diffs in real-time right from the terminal.
 - **Task Isolation:** Agents run in isolated worktrees (`../agent-worktree-<id>`), preventing them from interfering with your active development or with each other.
 - **Easy Review and Merge:** When an agent finishes its task, the orchestrator merges the task branch into `agents`, then merges `agents` back into your current branch. It then removes the worktree and deletes the task branch. You can clear the finished item from the TUI with one key.
+- **Recovery on Open:** If old task worktrees are still there when the app starts, it loads them into the list and starts auto merge for them.
 
 This keeps your main working tree clean while agents work in parallel.
 
@@ -23,7 +24,7 @@ This keeps your main working tree clean while agents work in parallel.
 2. The orchestrator spins up a new Git worktree and a branch for the task.
 3. The app makes sure the shared `agents` branch exists.
 4. The app writes `.junie/AGENTS.md` inside the task worktree.
-5. A headless `junie` CLI process is spawned inside that worktree with your prompt plus the guide path.
+5. A headless `junie` CLI process is spawned inside that worktree with your prompt, the guide path, and the short output rules.
 6. The TUI streams the agent's stdout and stderr and polls `git diff` to show what changes the agent is making.
 7. When the agent completes the task, the orchestrator auto merges the changes into `agents` and then into your current branch.
 8. Press `y` on a merged or failed item to clear it from the list.
@@ -38,10 +39,22 @@ You need these tools before you start:
 
 The app should be started from inside a Git repo. For each task it creates:
 
-- a branch named `task-<id>`
+- a branch named `agent/task-<id>`
 - a worktree at `../agent-worktree-<id>`
 
 The app also keeps a shared branch named `agents`. New task worktrees are created from this branch.
+
+## Current imports and crates
+
+The app currently depends on these crates:
+
+- `crossterm` for raw terminal mode, screen switching, and key input
+- `ratatui` for the TUI layout and widgets
+- `tokio` for async tasks, process handling, timers, and shared state
+- `futures` is listed in `Cargo.toml` but is not imported in `src` yet
+- `notify` is listed in `Cargo.toml` but is not imported in `src` yet
+
+The Rust source also imports standard library parts like `Arc`, `Mutex`, `Error`, `io`, `Path`, `Stdio`, `Duration`, and `SystemTime`.
 
 ## Run the app
 
@@ -78,7 +91,7 @@ The TUI has three main parts:
    - keeps the newest log lines visible
 3. **Live Diff / File Watcher** on the bottom right
    - shows the current `git diff` from the task worktree
-   - refreshes while the task is running
+   - refreshes by polling while the task is running
 
 If there is no selected task yet, the right side shows `No task selected` and an empty diff.
 
@@ -95,7 +108,7 @@ Each task moves through this flow:
 2. You type a prompt and press `Enter`
 3. The app creates a new worktree and branch from `agents`
 4. The app writes `.junie/AGENTS.md` in that worktree
-5. The app starts `junie` in that worktree with your prompt plus the guide path
+5. The app starts `junie` in that worktree with your prompt plus the guide path and short output rules
 6. The app streams logs and updates the diff view
 7. When the agent completes, the orchestrator auto merges the task into `agents` and then into your current branch
 8. Press `y` to clear a merged or failed task from the list
