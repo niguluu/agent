@@ -36,6 +36,14 @@ From the project root run:
 cargo run
 ```
 
+To build a release binary run:
+
+```bash
+cargo build --release
+```
+
+The app starts in normal mode with an empty task list.
+
 ## Screen layout
 
 The TUI has three main parts:
@@ -68,6 +76,8 @@ Each task moves through this flow:
 7. You press `y` to merge the task branch into your current branch
 8. The app removes the task worktree and deletes the task branch
 
+If you press `Enter` on an empty prompt, the app does not create a task.
+
 ## Task states
 
 The left list uses short state marks:
@@ -95,6 +105,14 @@ The left list uses short state marks:
 - `Backspace` delete one character
 - `Esc` cancel and go back
 
+## What you see while it runs
+
+- the log panel keeps the newest lines from agent stdout and stderr
+- the task stores up to 1000 log lines
+- the log view shows the newest 20 lines for the selected task
+- the diff panel refreshes about every 2 seconds while the task runs
+- `y` only starts a merge when the task state is `[?]`
+
 ## Merge behavior
 
 When you approve a finished task, the app:
@@ -104,8 +122,11 @@ When you approve a finished task, the app:
 - deletes the task branch
 - marks the task as merged or failed in the UI
 
+If the merge fails, the error text is added to the task log.
+
 ## Notes
 
 - The app does not auto merge work. You review first.
 - If `junie` cannot start, the task is marked failed.
 - If Git worktree setup fails, the task is marked failed and logs show the error.
+- If you press `y` on a task that is not ready, nothing happens.
