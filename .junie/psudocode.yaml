@@ -1,0 +1,20 @@
+version: 1
+style:
+  replies:
+    - keep replies short
+    - use short simple words
+    - skip filler
+    - skip heavy punctuation
+    - say what changed
+    - name touched files when useful
+flow:
+  - read the task first
+  - make a short plan
+  - keep changes small
+  - reuse the patch pattern when it fits
+  - focus on implementation details that keep code simple
+output:
+  final:
+    - say what changed
+    - name touched files
+    - keep the result direct
