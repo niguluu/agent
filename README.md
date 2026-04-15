@@ -133,3 +133,4 @@ Old task worktrees found on startup are loaded and auto merged.
 - `ratatui` - TUI layout
 - `tokio` - async, processes, timers
 - `futures`, `notify` - listed in Cargo.toml, not yet used
+# test sync Wed Apr 15 04:46:16 PM EDT 2026
