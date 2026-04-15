@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::Path, io};
+use std::{collections::HashSet, io, path::Path, time::{SystemTime, UNIX_EPOCH}};
 use tokio::process::Command;
 use crate::models::{AGENTS_BRANCH, GUIDELINES_TEXT};
 use super::text_utils::{pretty_diff_output, short_prompt};
@@ -28,50 +28,56 @@ pub struct WorktreeEntry {
 }
 
 pub async fn existing_task_worktrees() -> Vec<WorktreeEntry> {
+    let Ok(entries) = existing_repo_worktrees().await else {
+        return Vec::new();
+    };
+
+    let mut entries: Vec<_> = entries
+        .into_iter()
+        .filter(|entry| is_task_branch(&entry.branch))
+        .collect();
+
+    entries.sort_by_key(|entry| task_id_from_branch(&entry.branch).unwrap_or(usize::MAX));
+    entries
+}
+
+async fn existing_repo_worktrees() -> Result<Vec<WorktreeEntry>, String> {
     let out = Command::new("git")
         .args(["worktree", "list", "--porcelain"])
         .output()
-        .await;
+        .await
+        .map_err(|err| format!("worktree list failed {}", err))?;
 
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+
+    let text = String::from_utf8_lossy(&out.stdout);
     let mut entries = Vec::new();
-    if let Ok(output) = out {
-        if !output.status.success() {
-            return entries;
-        }
+    let mut current_path: Option<String> = None;
+    let mut current_branch: Option<String> = None;
 
-        let text = String::from_utf8_lossy(&output.stdout);
-        let mut current_path: Option<String> = None;
-        let mut current_branch: Option<String> = None;
-
-        for line in text.lines() {
-            if let Some(path) = line.strip_prefix("worktree ") {
-                if let (Some(path), Some(branch)) = (current_path.take(), current_branch.take()) {
-                    if is_task_branch(&branch) {
-                        entries.push(WorktreeEntry { path, branch });
-                    }
-                }
-                current_path = Some(path.trim().to_string());
-                current_branch = None;
-            } else if let Some(branch) = line.strip_prefix("branch refs/heads/") {
-                current_branch = Some(branch.trim().to_string());
-            } else if line.trim().is_empty() {
-                if let (Some(path), Some(branch)) = (current_path.take(), current_branch.take()) {
-                    if is_task_branch(&branch) {
-                        entries.push(WorktreeEntry { path, branch });
-                    }
-                }
+    for line in text.lines() {
+        if let Some(path) = line.strip_prefix("worktree ") {
+            if let (Some(path), Some(branch)) = (current_path.take(), current_branch.take()) {
+                entries.push(WorktreeEntry { path, branch });
             }
-        }
-
-        if let (Some(path), Some(branch)) = (current_path, current_branch) {
-            if is_task_branch(&branch) {
+            current_path = Some(path.trim().to_string());
+            current_branch = None;
+        } else if let Some(branch) = line.strip_prefix("branch refs/heads/") {
+            current_branch = Some(branch.trim().to_string());
+        } else if line.trim().is_empty() {
+            if let (Some(path), Some(branch)) = (current_path.take(), current_branch.take()) {
                 entries.push(WorktreeEntry { path, branch });
             }
         }
     }
 
-    entries.sort_by_key(|entry| task_id_from_branch(&entry.branch).unwrap_or(usize::MAX));
-    entries
+    if let (Some(path), Some(branch)) = (current_path, current_branch) {
+        entries.push(WorktreeEntry { path, branch });
+    }
+
+    Ok(entries)
 }
 
 fn is_task_branch(branch: &str) -> bool {
@@ -222,28 +228,31 @@ pub async fn ensure_agents_branch(repo_root: &str) -> Result<(), String> {
     Ok(())
 }
 
-async fn checkout_branch(repo_root: &str, branch_name: &str) -> Result<(), String> {
-    let checkout = Command::new("git")
-        .args(["checkout", branch_name])
-        .current_dir(repo_root)
-        .output()
-        .await
-        .map_err(|err| format!("checkout failed {}", err))?;
-
-    if !checkout.status.success() {
-        return Err(format!(
-            "could not switch to {} {}",
-            branch_name,
-            String::from_utf8_lossy(&checkout.stderr).trim()
-        ));
+async fn merge_branch(repo_root: &str, source_branch: &str, target_branch: &str) -> Result<(), String> {
+    if let Some(path) = branch_worktree_path(target_branch).await? {
+        return merge_branch_in_place(&path, source_branch, target_branch).await;
     }
 
-    Ok(())
+    let temp_worktree = create_temp_merge_worktree(repo_root, target_branch).await?;
+    let merge_result = merge_branch_in_place(&temp_worktree, source_branch, target_branch).await;
+    let remove_result = remove_temp_merge_worktree(repo_root, &temp_worktree).await;
+
+    match (merge_result, remove_result) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(err), _) => Err(err),
+        (Ok(()), Err(err)) => Err(err),
+    }
 }
 
-async fn merge_branch(repo_root: &str, source_branch: &str, target_branch: &str) -> Result<(), String> {
-    checkout_branch(repo_root, target_branch).await?;
+async fn branch_worktree_path(branch_name: &str) -> Result<Option<String>, String> {
+    Ok(existing_repo_worktrees()
+        .await?
+        .into_iter()
+        .find(|entry| entry.branch == branch_name)
+        .map(|entry| entry.path))
+}
 
+async fn merge_branch_in_place(worktree_path: &str, source_branch: &str, target_branch: &str) -> Result<(), String> {
     let merge = Command::new("git")
         .args([
             "merge",
@@ -252,7 +261,7 @@ async fn merge_branch(repo_root: &str, source_branch: &str, target_branch: &str)
             &format!("Merge {}", source_branch),
             source_branch,
         ])
-        .current_dir(repo_root)
+        .current_dir(worktree_path)
         .output()
         .await
         .map_err(|err| format!("merge command failed {}", err))?;
@@ -262,6 +271,50 @@ async fn merge_branch(repo_root: &str, source_branch: &str, target_branch: &str)
             "merge to {} failed {}",
             target_branch,
             String::from_utf8_lossy(&merge.stderr).trim()
+        ));
+    }
+
+    Ok(())
+}
+
+async fn create_temp_merge_worktree(repo_root: &str, target_branch: &str) -> Result<String, String> {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| format!("clock error {}", err))?
+        .as_nanos();
+    let temp_path = std::env::temp_dir()
+        .join(format!("junie-merge-{}-{}", target_branch, stamp));
+    let temp_path_str = temp_path.to_string_lossy().to_string();
+
+    let add = Command::new("git")
+        .args(["worktree", "add", "--detach", &temp_path_str, target_branch])
+        .current_dir(repo_root)
+        .output()
+        .await
+        .map_err(|err| format!("temp worktree add failed {}", err))?;
+
+    if !add.status.success() {
+        return Err(format!(
+            "temp worktree add failed {}",
+            String::from_utf8_lossy(&add.stderr).trim()
+        ));
+    }
+
+    Ok(temp_path_str)
+}
+
+async fn remove_temp_merge_worktree(repo_root: &str, worktree_path: &str) -> Result<(), String> {
+    let remove = Command::new("git")
+        .args(["worktree", "remove", "--force", worktree_path])
+        .current_dir(repo_root)
+        .output()
+        .await
+        .map_err(|err| format!("temp worktree remove failed {}", err))?;
+
+    if !remove.status.success() {
+        return Err(format!(
+            "temp worktree remove failed {}",
+            String::from_utf8_lossy(&remove.stderr).trim()
         ));
     }
 

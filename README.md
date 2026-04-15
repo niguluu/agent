@@ -4,6 +4,8 @@ A small terminal app for running many headless Junie tasks at once.
 
 It starts each task in its own Git worktree and branch, shows live agent output, and auto merges finished work.
 
+The crate name is `junie`. Running `cargo run` starts the TUI app.
+
 ## What this app does
 
 The app gives you one place to:
@@ -73,6 +75,8 @@ The TUI has three main parts:
    - shows the current `git diff` from the task worktree
    - refreshes while the task is running
 
+If there is no selected task yet, the right side shows `No task selected` and an empty diff.
+
 The footer changes by mode:
 
 - **Normal mode** shows task status and key hints
@@ -89,6 +93,10 @@ Each task moves through this flow:
 5. The app streams logs and updates the diff view
 6. When the agent completes, the orchestrator auto merges the task
 7. Press `y` to clear a merged or failed task from the list
+
+If you press `Enter` on an empty prompt, the app does not create a task.
+
+Each new task starts with one log line that says `Queued: <prompt>`.
 
 ## Task states
 
@@ -112,8 +120,8 @@ The left list uses short state marks:
 When an agent finishes its task, the app:
 
 - runs a `git merge --no-ff` for the task branch
-- removes the task worktree
-- deletes the task branch
+- force removes the task worktree after the merge command finishes
+- deletes the task branch after the merge command finishes
 - marks the task as merged or failed in the UI
 
 If the merge fails, the error text is added to the task log.
