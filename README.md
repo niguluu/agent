@@ -2,36 +2,29 @@
 
 A small terminal app for running many headless Junie tasks at once.
 
-It starts each task in its own Git worktree and branch, shows live agent output, and lets you merge finished work from the TUI.
+It starts each task in its own Git worktree and branch, shows live agent output, and auto merges finished work.
 
 ## What this app does
 
 The app gives you one place to:
 
-<<<<<<< Updated upstream
-- queue new Junie prompts
-- keep each task in its own branch and worktree
-- watch agent logs and live diffs while it runs
-- review finished work before you merge it
-=======
 - **Headless Multi-Agent Factory:** Queue tasks by providing prompts. The orchestrator automatically creates a new Git worktree and branch (`agent/task-<id>`) for each task.
 - **Live Monitoring:** Monitor each agent's logs, thoughts, and live code diffs in real-time right from the terminal.
 - **Task Isolation:** Agents run in isolated worktrees (`../agent-worktree-<id>`), preventing them from interfering with your active development or with each other.
 - **Easy Review and Merge:** When an agent finishes its task, the orchestrator merges the task branch, removes the worktree, and cleans up the branch. You can then clear the finished item from the TUI with one key.
->>>>>>> Stashed changes
 
 This keeps your main working tree clean while agents work in parallel.
 
-<<<<<<< Updated upstream
-## Requirements
-=======
+## How it Works
+
 1. You input a prompt for a task using the TUI.
 2. The orchestrator spins up a new Git worktree and a branch for the task.
 3. A headless `junie` CLI process is spawned inside that worktree with your prompt.
 4. The TUI streams the agent's stdout/stderr and periodically polls `git diff` to show you what changes the agent is making.
 5. When the agent completes the task, the orchestrator auto merges the changes into your main work branch.
 6. Press `y` on a merged or failed item to clear it from the list.
->>>>>>> Stashed changes
+
+## Requirements
 
 You need these tools before you start:
 
@@ -41,7 +34,7 @@ You need these tools before you start:
 
 The app should be started from inside a Git repo. For each task it creates:
 
-- a branch named `agent/task-<id>`
+- a branch named `task-<id>`
 - a worktree at `../agent-worktree-<id>`
 
 ## Run the app
@@ -54,19 +47,17 @@ cargo run
 
 To build a release binary run:
 
-<<<<<<< Updated upstream
 ```bash
 cargo build --release
 ```
-=======
+
+## Keys
+
 - `i` or `n` - Enter Input mode to create a new task.
 - `Enter` (in Input mode) - Submit task prompt.
 - `Up` / `Down` or `k` / `j` - Navigate through the list of active agents.
 - `y` - Clear a merged or failed task from the list.
 - `q` or `Ctrl+c` - Quit the application.
->>>>>>> Stashed changes
-
-The app starts in normal mode with an empty task list.
 
 ## Screen layout
 
@@ -96,11 +87,8 @@ Each task moves through this flow:
 3. The app creates a new worktree and branch
 4. The app starts `junie <prompt>` in that worktree
 5. The app streams logs and updates the diff view
-6. When the agent exits the task waits for review
-7. You press `y` to merge the task branch into your current branch
-8. The app removes the task worktree and deletes the task branch
-
-If you press `Enter` on an empty prompt, the app does not create a task.
+6. When the agent completes, the orchestrator auto merges the task
+7. Press `y` to clear a merged or failed task from the list
 
 ## Task states
 
@@ -108,38 +96,20 @@ The left list uses short state marks:
 
 - `[P]` Pending
 - `[R]` Running
-- `[?]` Needs approval
+- `[>]` Merging
 - `[M]` Merged
 - `[X]` Failed
-
-## Keys
-
-### Normal mode
-
-- `n` or `i` start a new task
-- `Up` or `k` move up the task list
-- `Down` or `j` move down the task list
-- `y` merge the selected task when it is ready
-- `q` or `Ctrl+c` quit the app
-
-### Input mode
-
-- type to enter the prompt
-- `Enter` submit the task
-- `Backspace` delete one character
-- `Esc` cancel and go back
 
 ## What you see while it runs
 
 - the log panel keeps the newest lines from agent stdout and stderr
 - the task stores up to 1000 log lines
-- the log view shows the newest 20 lines for the selected task
+- the log view shows the newest lines for the selected task
 - the diff panel refreshes about every 2 seconds while the task runs
-- `y` only starts a merge when the task state is `[?]`
 
 ## Merge behavior
 
-When you approve a finished task, the app:
+When an agent finishes its task, the app:
 
 - runs a `git merge --no-ff` for the task branch
 - removes the task worktree
@@ -150,7 +120,7 @@ If the merge fails, the error text is added to the task log.
 
 ## Notes
 
-- The app does not auto merge work. You review first.
+- The app auto merges work into your main branch.
 - If `junie` cannot start, the task is marked failed.
 - If Git worktree setup fails, the task is marked failed and logs show the error.
-- If you press `y` on a task that is not ready, nothing happens.
+- Press `y` on merged/failed tasks to clear them from the list.

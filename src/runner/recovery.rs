@@ -61,7 +61,7 @@ pub async fn bootstrap_existing_tasks(app: Arc<Mutex<App>>) {
         }
     }
 
-    let tasks_ref = {
+    let tasks_ref: SharedTasks = {
         let app_ref = app.lock().await;
         Arc::clone(&app_ref.tasks)
     };
@@ -72,7 +72,7 @@ pub async fn bootstrap_existing_tasks(app: Arc<Mutex<App>>) {
     };
 
     for task in recovered_tasks {
-        let tasks_ref = Arc::clone(&tasks_ref);
+        let tasks_ref: SharedTasks = Arc::clone(&tasks_ref);
         tokio::spawn(async move {
             {
                 let mut tasks = tasks_ref.lock().await;
