@@ -1,6 +1,6 @@
 # Junie Agent Orchestrator
 
-A small terminal app for running many headless Junie tasks at once.
+Run many headless Junie tasks at once from a terminal UI.
 
 It lets you queue prompts, starts each task in its own Git worktree and branch, shows live agent output and diffs, recovers old task worktrees on open, and auto merges finished work back into your current branch.
 
@@ -31,40 +31,17 @@ This keeps your main working tree clean while agents work in parallel.
 
 ## Requirements
 
-You need these tools before you start:
-
 - Rust and Cargo
-- Git with `git worktree` support
+- Git with worktree support
 - `junie` CLI in your `PATH`
 
-The app should be started from inside a Git repo. For each task it creates:
+Start the app from inside a Git repo.
 
-- a branch named `agent/task-<id>`
-- a worktree at `../agent-worktree-<id>`
-
-The app also keeps a shared branch named `agents`. New task worktrees are created from this branch.
-
-## Current imports and crates
-
-The app currently depends on these crates:
-
-- `crossterm` for raw terminal mode, screen switching, and key input
-- `ratatui` for the TUI layout and widgets
-- `tokio` for async tasks, process handling, timers, and shared state
-- `futures` is listed in `Cargo.toml` but is not imported in `src` yet
-- `notify` is listed in `Cargo.toml` but is not imported in `src` yet
-
-The Rust source also imports standard library parts like `Arc`, `Mutex`, `Error`, `io`, `Path`, `Stdio`, `Duration`, and `SystemTime`.
-
-## Run the app
-
-From the project root run:
+## Run
 
 ```bash
 cargo run
 ```
-
-To build a release binary run:
 
 ```bash
 cargo build --release
@@ -81,7 +58,7 @@ cargo build --release
 - `y` - Clear a merged or failed task from the list.
 - `q` or `Ctrl+c` - Quit the application.
 
-## Screen layout
+## Layout
 
 The TUI has three main parts:
 
@@ -121,41 +98,38 @@ Each new task starts with one log line that says `Queued: <prompt>`.
 
 ## Task states
 
-The left list uses short state marks:
-
 - `[P]` Pending
 - `[R]` Running
 - `[>]` Merging
 - `[M]` Merged
 - `[X]` Failed
 
-## What you see while it runs
+## Task flow
 
-- the log panel keeps the newest lines from agent stdout and stderr
-- the task stores up to 1000 log lines
-- the log view shows the newest lines for the selected task
-- the diff panel refreshes about every 800 ms while the task runs
+1. press `n`, type a prompt, press `Enter`
+2. app creates a worktree and branch from `agents`
+3. app writes `.junie/AGENTS.md` in the worktree
+4. app starts `junie` with your prompt
+5. logs and diff stream live
+6. on finish, merges task branch into `agents` then into your current branch
+7. press `y` to clear
 
-## Merge behavior
+## Merge
 
-When an agent finishes its task, the app:
+- commits any dirty changes first
+- merges task branch into `agents` with `--no-ff`
+- merges `agents` into your current branch with `--no-ff`
+- removes worktree and deletes task branch
 
-- commits any dirty task worktree changes first
-- merges the task branch into `agents` with `git merge --no-ff`
-- merges `agents` into your current branch with `git merge --no-ff`
-- force removes the task worktree after the merge steps finish
-- deletes the task branch after the merge steps finish
-- marks the task as merged or failed in the UI
+If merge fails, the error goes to the task log.
 
-If the merge fails, the error text is added to the task log.
+## Recovery
 
-## Recovery on open
+Old task worktrees found on startup are loaded and auto merged.
 
-If old task worktrees already exist when the app starts, it loads them into the list and starts auto merge for them at once.
+## Crates
 
-## Notes
-
-- The app auto merges work into your current branch by way of `agents`.
-- If `junie` cannot start, the task is marked failed.
-- If Git worktree setup fails, the task is marked failed and logs show the error.
-- Press `y` on merged/failed tasks to clear them from the list.
+- `crossterm` - terminal input and raw mode
+- `ratatui` - TUI layout
+- `tokio` - async, processes, timers
+- `futures`, `notify` - listed in Cargo.toml, not yet used

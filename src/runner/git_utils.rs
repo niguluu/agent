@@ -412,8 +412,7 @@ async fn merge_agents_to_main() -> Result<String, String> {
 
 pub async fn auto_merge_task(branch_name: &str, worktree_path: &str) -> Result<String, String> {
     let task_summary = merge_task_branch_to_agents(branch_name, worktree_path).await?;
-    let main_summary = merge_agents_to_main().await?;
-    Ok(format!("{} then {}", task_summary, main_summary))
+    Ok(task_summary)
 }
 
 pub async fn worktree_is_dirty(worktree_path: &str) -> Result<bool, String> {
@@ -655,6 +654,7 @@ mod tests {
         assert!(saved.contains("reuse the patch pattern when it fits"));
 
         let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn build_agent_prompt_trims_user_prompt_text() {
