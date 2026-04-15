@@ -48,7 +48,7 @@ pub const PSEUDOCODE_TEXT: &str = "version: 1\nstyle:\n  replies:\n    - keep re
 
 #[cfg(test)]
 mod tests {
-    use super::{Task, TaskStatus};
+    use super::{GUIDELINES_TEXT, Task, TaskStatus};
 
     #[test]
     fn new_task_sets_defaults() {
@@ -61,5 +61,12 @@ mod tests {
         assert_eq!(task.status, TaskStatus::Pending);
         assert_eq!(task.logs, vec!["Queued: ship it"]);
         assert!(task.diff.is_empty());
+    }
+
+    #[test]
+    fn guidelines_text_keeps_tree_output_small() {
+        assert!(GUIDELINES_TEXT.contains("keep any file tree short and focused"));
+        assert!(GUIDELINES_TEXT.contains("prefer focused file checks over full repo tree dumps"));
+        assert!(GUIDELINES_TEXT.contains("never print huge file contents unless needed"));
     }
 }

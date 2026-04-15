@@ -655,5 +655,15 @@ mod tests {
         assert!(saved.contains("reuse the patch pattern when it fits"));
 
         let _ = fs::remove_dir_all(root);
+
+    #[test]
+    fn build_agent_prompt_trims_user_prompt_text() {
+        let prompt = build_agent_prompt(
+            "  trim the file tree  ",
+            ".junie/AGENTS.md",
+            ".junie/psudocode.yaml",
+        );
+
+        assert!(prompt.contains("user prompt: trim the file tree\n"));
     }
 }
