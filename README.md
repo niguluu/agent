@@ -8,14 +8,30 @@ It starts each task in its own Git worktree and branch, shows live agent output,
 
 The app gives you one place to:
 
+<<<<<<< Updated upstream
 - queue new Junie prompts
 - keep each task in its own branch and worktree
 - watch agent logs and live diffs while it runs
 - review finished work before you merge it
+=======
+- **Headless Multi-Agent Factory:** Queue tasks by providing prompts. The orchestrator automatically creates a new Git worktree and branch (`agent/task-<id>`) for each task.
+- **Live Monitoring:** Monitor each agent's logs, thoughts, and live code diffs in real-time right from the terminal.
+- **Task Isolation:** Agents run in isolated worktrees (`../agent-worktree-<id>`), preventing them from interfering with your active development or with each other.
+- **Easy Review and Merge:** When an agent finishes its task, the orchestrator merges the task branch, removes the worktree, and cleans up the branch. You can then clear the finished item from the TUI with one key.
+>>>>>>> Stashed changes
 
 This keeps your main working tree clean while agents work in parallel.
 
+<<<<<<< Updated upstream
 ## Requirements
+=======
+1. You input a prompt for a task using the TUI.
+2. The orchestrator spins up a new Git worktree and a branch for the task.
+3. A headless `junie` CLI process is spawned inside that worktree with your prompt.
+4. The TUI streams the agent's stdout/stderr and periodically polls `git diff` to show you what changes the agent is making.
+5. When the agent completes the task, the orchestrator auto merges the changes into your main work branch.
+6. Press `y` on a merged or failed item to clear it from the list.
+>>>>>>> Stashed changes
 
 You need these tools before you start:
 
@@ -38,9 +54,17 @@ cargo run
 
 To build a release binary run:
 
+<<<<<<< Updated upstream
 ```bash
 cargo build --release
 ```
+=======
+- `i` or `n` - Enter Input mode to create a new task.
+- `Enter` (in Input mode) - Submit task prompt.
+- `Up` / `Down` or `k` / `j` - Navigate through the list of active agents.
+- `y` - Clear a merged or failed task from the list.
+- `q` or `Ctrl+c` - Quit the application.
+>>>>>>> Stashed changes
 
 The app starts in normal mode with an empty task list.
 
