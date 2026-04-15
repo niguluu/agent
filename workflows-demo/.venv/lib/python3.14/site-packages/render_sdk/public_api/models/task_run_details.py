@@ -1,0 +1,206 @@
+import datetime
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, TypeVar, Union, cast
+
+from attrs import define as _attrs_define
+from attrs import field as _attrs_field
+from dateutil.parser import isoparse
+
+from ..models.task_run_status import TaskRunStatus
+from ..types import UNSET, Unset
+
+if TYPE_CHECKING:
+    from ..models.task_attempt_details import TaskAttemptDetails
+    from ..models.task_data_type_1 import TaskDataType1
+
+
+T = TypeVar("T", bound="TaskRunDetails")
+
+
+@_attrs_define
+class TaskRunDetails:
+    """
+    Attributes:
+        id (str):
+        task_id (str):
+        status (TaskRunStatus):
+        results (list[Any]):
+        input_ (Union['TaskDataType1', list[Any]]): Input data for a task. Can be either an array (for positional
+            arguments) or an object (for named parameters).
+        parent_task_run_id (str):
+        root_task_run_id (str):
+        retries (int):
+        attempts (list['TaskAttemptDetails']):
+        error (Union[Unset, str]): Error message if the task run failed.
+        started_at (Union[Unset, datetime.datetime]):
+        completed_at (Union[Unset, datetime.datetime]):
+    """
+
+    id: str
+    task_id: str
+    status: TaskRunStatus
+    results: list[Any]
+    input_: Union["TaskDataType1", list[Any]]
+    parent_task_run_id: str
+    root_task_run_id: str
+    retries: int
+    attempts: list["TaskAttemptDetails"]
+    error: Union[Unset, str] = UNSET
+    started_at: Union[Unset, datetime.datetime] = UNSET
+    completed_at: Union[Unset, datetime.datetime] = UNSET
+    additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        id = self.id
+
+        task_id = self.task_id
+
+        status = self.status.value
+
+        results = self.results
+
+        input_: Union[dict[str, Any], list[Any]]
+        if isinstance(self.input_, list):
+            input_ = self.input_
+
+        else:
+            input_ = self.input_.to_dict()
+
+        parent_task_run_id = self.parent_task_run_id
+
+        root_task_run_id = self.root_task_run_id
+
+        retries = self.retries
+
+        attempts = []
+        for attempts_item_data in self.attempts:
+            attempts_item = attempts_item_data.to_dict()
+            attempts.append(attempts_item)
+
+        error = self.error
+
+        started_at: Union[Unset, str] = UNSET
+        if not isinstance(self.started_at, Unset):
+            started_at = self.started_at.isoformat()
+
+        completed_at: Union[Unset, str] = UNSET
+        if not isinstance(self.completed_at, Unset):
+            completed_at = self.completed_at.isoformat()
+
+        field_dict: dict[str, Any] = {}
+        field_dict.update(self.additional_properties)
+        field_dict.update(
+            {
+                "id": id,
+                "taskId": task_id,
+                "status": status,
+                "results": results,
+                "input": input_,
+                "parentTaskRunId": parent_task_run_id,
+                "rootTaskRunId": root_task_run_id,
+                "retries": retries,
+                "attempts": attempts,
+            }
+        )
+        if error is not UNSET:
+            field_dict["error"] = error
+        if started_at is not UNSET:
+            field_dict["startedAt"] = started_at
+        if completed_at is not UNSET:
+            field_dict["completedAt"] = completed_at
+
+        return field_dict
+
+    @classmethod
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.task_attempt_details import TaskAttemptDetails
+        from ..models.task_data_type_1 import TaskDataType1
+
+        d = dict(src_dict)
+        id = d.pop("id")
+
+        task_id = d.pop("taskId")
+
+        status = TaskRunStatus(d.pop("status"))
+
+        results = cast(list[Any], d.pop("results"))
+
+        def _parse_input_(data: object) -> Union["TaskDataType1", list[Any]]:
+            try:
+                if not isinstance(data, list):
+                    raise TypeError()
+                componentsschemas_task_data_type_0 = cast(list[Any], data)
+
+                return componentsschemas_task_data_type_0
+            except:  # noqa: E722
+                pass
+            if not isinstance(data, dict):
+                raise TypeError()
+            componentsschemas_task_data_type_1 = TaskDataType1.from_dict(data)
+
+            return componentsschemas_task_data_type_1
+
+        input_ = _parse_input_(d.pop("input"))
+
+        parent_task_run_id = d.pop("parentTaskRunId")
+
+        root_task_run_id = d.pop("rootTaskRunId")
+
+        retries = d.pop("retries")
+
+        attempts = []
+        _attempts = d.pop("attempts")
+        for attempts_item_data in _attempts:
+            attempts_item = TaskAttemptDetails.from_dict(attempts_item_data)
+
+            attempts.append(attempts_item)
+
+        error = d.pop("error", UNSET)
+
+        _started_at = d.pop("startedAt", UNSET)
+        started_at: Union[Unset, datetime.datetime]
+        if isinstance(_started_at, Unset):
+            started_at = UNSET
+        else:
+            started_at = isoparse(_started_at)
+
+        _completed_at = d.pop("completedAt", UNSET)
+        completed_at: Union[Unset, datetime.datetime]
+        if isinstance(_completed_at, Unset):
+            completed_at = UNSET
+        else:
+            completed_at = isoparse(_completed_at)
+
+        task_run_details = cls(
+            id=id,
+            task_id=task_id,
+            status=status,
+            results=results,
+            input_=input_,
+            parent_task_run_id=parent_task_run_id,
+            root_task_run_id=root_task_run_id,
+            retries=retries,
+            attempts=attempts,
+            error=error,
+            started_at=started_at,
+            completed_at=completed_at,
+        )
+
+        task_run_details.additional_properties = d
+        return task_run_details
+
+    @property
+    def additional_keys(self) -> list[str]:
+        return list(self.additional_properties.keys())
+
+    def __getitem__(self, key: str) -> Any:
+        return self.additional_properties[key]
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self.additional_properties[key] = value
+
+    def __delitem__(self, key: str) -> None:
+        del self.additional_properties[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.additional_properties
