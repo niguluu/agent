@@ -1,0 +1,11 @@
+services:
+  - type: worker
+    name: agent-workflows
+    runtime: python
+    plan: free
+    rootDir: workflows-demo
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: RENDER_SDK_MODE
+        value: production
