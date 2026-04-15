@@ -10,10 +10,10 @@ The crate name is `junie`. Running `cargo run` starts the TUI app.
 
 The app gives you one place to:
 
-- **Headless Multi-Agent Factory:** Queue tasks by providing prompts. The orchestrator automatically creates a new Git worktree and branch (`agent/task-<id>`) for each task.
+- **Headless Multi-Agent Factory:** Queue tasks by providing prompts. The orchestrator automatically creates a new Git worktree and branch (`task-<id>`) for each task.
 - **Live Monitoring:** Monitor each agent's logs, thoughts, and live code diffs in real-time right from the terminal.
 - **Task Isolation:** Agents run in isolated worktrees (`../agent-worktree-<id>`), preventing them from interfering with your active development or with each other.
-- **Easy Review and Merge:** When an agent finishes its task, the orchestrator merges the task branch, removes the worktree, and cleans up the branch. You can then clear the finished item from the TUI with one key.
+- **Easy Review and Merge:** When an agent finishes its task, the orchestrator merges the task branch into `agents`, then merges `agents` back into your current branch. It then removes the worktree and deletes the task branch. You can clear the finished item from the TUI with one key.
 
 This keeps your main working tree clean while agents work in parallel.
 
@@ -21,10 +21,12 @@ This keeps your main working tree clean while agents work in parallel.
 
 1. You input a prompt for a task using the TUI.
 2. The orchestrator spins up a new Git worktree and a branch for the task.
-3. A headless `junie` CLI process is spawned inside that worktree with your prompt.
-4. The TUI streams the agent's stdout/stderr and periodically polls `git diff` to show you what changes the agent is making.
-5. When the agent completes the task, the orchestrator auto merges the changes into your main work branch.
-6. Press `y` on a merged or failed item to clear it from the list.
+3. The app makes sure the shared `agents` branch exists.
+4. The app writes `.junie/AGENTS.md` inside the task worktree.
+5. A headless `junie` CLI process is spawned inside that worktree with your prompt plus the guide path.
+6. The TUI streams the agent's stdout and stderr and polls `git diff` to show what changes the agent is making.
+7. When the agent completes the task, the orchestrator auto merges the changes into `agents` and then into your current branch.
+8. Press `y` on a merged or failed item to clear it from the list.
 
 ## Requirements
 
@@ -38,6 +40,8 @@ The app should be started from inside a Git repo. For each task it creates:
 
 - a branch named `task-<id>`
 - a worktree at `../agent-worktree-<id>`
+
+The app also keeps a shared branch named `agents`. New task worktrees are created from this branch.
 
 ## Run the app
 
@@ -57,6 +61,7 @@ cargo build --release
 
 - `i` or `n` - Enter Input mode to create a new task.
 - `Enter` (in Input mode) - Submit task prompt.
+- `Esc` (in Input mode) - Leave Input mode.
 - `Up` / `Down` or `k` / `j` - Navigate through the list of active agents.
 - `y` - Clear a merged or failed task from the list.
 - `q` or `Ctrl+c` - Quit the application.
@@ -88,11 +93,12 @@ Each task moves through this flow:
 
 1. You press `n` or `i`
 2. You type a prompt and press `Enter`
-3. The app creates a new worktree and branch
-4. The app starts `junie <prompt>` in that worktree
-5. The app streams logs and updates the diff view
-6. When the agent completes, the orchestrator auto merges the task
-7. Press `y` to clear a merged or failed task from the list
+3. The app creates a new worktree and branch from `agents`
+4. The app writes `.junie/AGENTS.md` in that worktree
+5. The app starts `junie` in that worktree with your prompt plus the guide path
+6. The app streams logs and updates the diff view
+7. When the agent completes, the orchestrator auto merges the task into `agents` and then into your current branch
+8. Press `y` to clear a merged or failed task from the list
 
 If you press `Enter` on an empty prompt, the app does not create a task.
 
@@ -113,22 +119,28 @@ The left list uses short state marks:
 - the log panel keeps the newest lines from agent stdout and stderr
 - the task stores up to 1000 log lines
 - the log view shows the newest lines for the selected task
-- the diff panel refreshes about every 2 seconds while the task runs
+- the diff panel refreshes about every 800 ms while the task runs
 
 ## Merge behavior
 
 When an agent finishes its task, the app:
 
-- runs a `git merge --no-ff` for the task branch
-- force removes the task worktree after the merge command finishes
-- deletes the task branch after the merge command finishes
+- commits any dirty task worktree changes first
+- merges the task branch into `agents` with `git merge --no-ff`
+- merges `agents` into your current branch with `git merge --no-ff`
+- force removes the task worktree after the merge steps finish
+- deletes the task branch after the merge steps finish
 - marks the task as merged or failed in the UI
 
 If the merge fails, the error text is added to the task log.
 
+## Recovery on open
+
+If old task worktrees already exist when the app starts, it loads them into the list and starts auto merge for them at once.
+
 ## Notes
 
-- The app auto merges work into your main branch.
+- The app auto merges work into your current branch by way of `agents`.
 - If `junie` cannot start, the task is marked failed.
 - If Git worktree setup fails, the task is marked failed and logs show the error.
 - Press `y` on merged/failed tasks to clear them from the list.
