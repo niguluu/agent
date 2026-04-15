@@ -1,9 +1,14 @@
-use std::{collections::HashSet, io, path::Path, time::{SystemTime, UNIX_EPOCH}};
-use tokio::process::Command;
-use crate::models::{AGENTS_BRANCH, GUIDELINES_TEXT};
-use super::text_utils::{pretty_diff_output, short_prompt};
 use super::store::set_task_diff;
+use super::text_utils::{pretty_diff_output, short_prompt};
 use crate::models::SharedTasks;
+use crate::models::{AGENTS_BRANCH, GUIDELINES_TEXT};
+use std::{
+    collections::HashSet,
+    io,
+    path::Path,
+    time::{SystemTime, UNIX_EPOCH},
+};
+use tokio::process::Command;
 
 pub async fn allocate_task_slot(start_id: usize) -> (usize, String, String) {
     let used_branches = existing_branch_names().await;
@@ -92,7 +97,10 @@ pub fn task_id_from_branch(branch: &str) -> Option<usize> {
 }
 
 async fn existing_branch_names() -> HashSet<String> {
-    let out = Command::new("git").args(["branch", "--format=%(refname:short)"]).output().await;
+    let out = Command::new("git")
+        .args(["branch", "--format=%(refname:short)"])
+        .output()
+        .await;
 
     match out {
         Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
@@ -228,7 +236,11 @@ pub async fn ensure_agents_branch(repo_root: &str) -> Result<(), String> {
     Ok(())
 }
 
-async fn merge_branch(repo_root: &str, source_branch: &str, target_branch: &str) -> Result<(), String> {
+async fn merge_branch(
+    repo_root: &str,
+    source_branch: &str,
+    target_branch: &str,
+) -> Result<(), String> {
     if let Some(path) = branch_worktree_path(target_branch).await? {
         return merge_branch_in_place(&path, source_branch, target_branch).await;
     }
@@ -252,7 +264,11 @@ async fn branch_worktree_path(branch_name: &str) -> Result<Option<String>, Strin
         .map(|entry| entry.path))
 }
 
-async fn merge_branch_in_place(worktree_path: &str, source_branch: &str, target_branch: &str) -> Result<(), String> {
+async fn merge_branch_in_place(
+    worktree_path: &str,
+    source_branch: &str,
+    target_branch: &str,
+) -> Result<(), String> {
     let merge = Command::new("git")
         .args([
             "merge",
@@ -277,13 +293,15 @@ async fn merge_branch_in_place(worktree_path: &str, source_branch: &str, target_
     Ok(())
 }
 
-async fn create_temp_merge_worktree(repo_root: &str, target_branch: &str) -> Result<String, String> {
+async fn create_temp_merge_worktree(
+    repo_root: &str,
+    target_branch: &str,
+) -> Result<String, String> {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|err| format!("clock error {}", err))?
         .as_nanos();
-    let temp_path = std::env::temp_dir()
-        .join(format!("junie-merge-{}-{}", target_branch, stamp));
+    let temp_path = std::env::temp_dir().join(format!("junie-merge-{}-{}", target_branch, stamp));
     let temp_path_str = temp_path.to_string_lossy().to_string();
 
     let add = Command::new("git")
@@ -321,7 +339,10 @@ async fn remove_temp_merge_worktree(repo_root: &str, worktree_path: &str) -> Res
     Ok(())
 }
 
-async fn merge_task_branch_to_agents(branch_name: &str, worktree_path: &str) -> Result<String, String> {
+async fn merge_task_branch_to_agents(
+    branch_name: &str,
+    worktree_path: &str,
+) -> Result<String, String> {
     let repo_root = repo_root().await?;
     ensure_agents_branch(&repo_root).await?;
     let commit_summary = commit_worktree_changes(worktree_path, branch_name).await?;
@@ -423,7 +444,10 @@ pub async fn worktree_diff_text(worktree_path: &str) -> String {
     }
 }
 
-async fn commit_worktree_changes(worktree_path: &str, branch_name: &str) -> Result<Option<String>, String> {
+async fn commit_worktree_changes(
+    worktree_path: &str,
+    branch_name: &str,
+) -> Result<Option<String>, String> {
     if !worktree_is_dirty(worktree_path).await? {
         return Ok(None);
     }

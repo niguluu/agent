@@ -1,14 +1,14 @@
-use crate::models::{SharedTasks, TaskStatus, AGENTS_BRANCH, GUIDELINES_PATH};
+use crate::models::{AGENTS_BRANCH, GUIDELINES_PATH, SharedTasks, TaskStatus};
 use std::{process::Stdio, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
 };
 
-use super::store::{
-    push_task_log, push_task_output, set_task_diff, set_task_status, set_task_result,
-};
 use super::git_utils::*;
+use super::store::{
+    push_task_log, push_task_output, set_task_diff, set_task_result, set_task_status,
+};
 use super::text_utils::clean_log_line;
 
 pub async fn run_agent_task(
@@ -43,7 +43,14 @@ pub async fn run_agent_task(
     }
 
     let worktree_add = Command::new("git")
-        .args(["worktree", "add", "-b", &branch_name, &worktree_path, AGENTS_BRANCH])
+        .args([
+            "worktree",
+            "add",
+            "-b",
+            &branch_name,
+            &worktree_path,
+            AGENTS_BRANCH,
+        ])
         .output()
         .await;
 
@@ -71,7 +78,12 @@ pub async fn run_agent_task(
     let guidelines_path = format!("{}/{}", worktree_path, GUIDELINES_PATH);
     if ensure_guidelines_file(&guidelines_path).is_ok() {
         set_task_result(&tasks_ref, id, "run with guide".to_string()).await;
-        push_task_log(&tasks_ref, id, format!("Guide ready at {}", GUIDELINES_PATH)).await;
+        push_task_log(
+            &tasks_ref,
+            id,
+            format!("Guide ready at {}", GUIDELINES_PATH),
+        )
+        .await;
     } else {
         push_task_log(&tasks_ref, id, "Could not write guide file".to_string()).await;
     }
@@ -154,9 +166,19 @@ pub async fn run_agent_task(
         Ok(exit) if exit.success() => {
             let result = summarize_task_result(&worktree_path, &prompt).await;
             set_task_result(&tasks_ref, id, result.clone()).await;
-            push_task_log(&tasks_ref, id, format!("agent done auto merge {} to {}", branch_name, AGENTS_BRANCH)).await;
+            push_task_log(
+                &tasks_ref,
+                id,
+                format!("agent done auto merge {} to {}", branch_name, AGENTS_BRANCH),
+            )
+            .await;
             set_task_status(&tasks_ref, id, TaskStatus::Merging).await;
-            set_task_diff(&tasks_ref, id, format!("merging {} into {}", branch_name, AGENTS_BRANCH)).await;
+            set_task_diff(
+                &tasks_ref,
+                id,
+                format!("merging {} into {}", branch_name, AGENTS_BRANCH),
+            )
+            .await;
 
             match auto_merge_task(&branch_name, &worktree_path).await {
                 Ok(summary) => {

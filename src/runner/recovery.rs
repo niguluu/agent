@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use crate::app::App;
-use crate::models::{Task, TaskStatus, AGENTS_BRANCH, SharedTasks};
 use super::git_utils::*;
 use super::store::*;
+use crate::app::App;
+use crate::models::{AGENTS_BRANCH, SharedTasks, Task, TaskStatus};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub async fn bootstrap_existing_tasks(app: Arc<Mutex<App>>) {
     let repo_root = match repo_root().await {
@@ -57,7 +57,10 @@ pub async fn bootstrap_existing_tasks(app: Arc<Mutex<App>>) {
 
     if let Some(current_branch) = current_branch_name(&repo_root).await {
         if current_branch != AGENTS_BRANCH {
-            app_state.error_message = Some(format!("loaded old tasks and kept base branch {}", current_branch));
+            app_state.error_message = Some(format!(
+                "loaded old tasks and kept base branch {}",
+                current_branch
+            ));
         }
     }
 
@@ -80,7 +83,10 @@ pub async fn bootstrap_existing_tasks(app: Arc<Mutex<App>>) {
                     found.status = TaskStatus::Merging;
                     found.result = format!("auto merge {}", found.branch_name);
                     found.diff = format!("merging {} into {}", found.branch_name, AGENTS_BRANCH);
-                    found.logs.push(format!("auto merge {} to {}", found.branch_name, AGENTS_BRANCH));
+                    found.logs.push(format!(
+                        "auto merge {} to {}",
+                        found.branch_name, AGENTS_BRANCH
+                    ));
                 }
             }
 
