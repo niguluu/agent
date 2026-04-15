@@ -1,6 +1,6 @@
 use crate::{
     models::Task,
-    runner::{run_agent_task, git_utils::allocate_task_slot},
+    runner::{git_utils::allocate_task_slot, run_agent_task},
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::sync::Arc;
@@ -45,7 +45,9 @@ async fn handle_normal_mode(app_state: &mut App, key: KeyEvent) -> bool {
                 let mut tasks = tasks_ref.lock().await;
                 if selected < tasks.len() {
                     let status = tasks[selected].status.clone();
-                    if status == crate::models::TaskStatus::Merged || status == crate::models::TaskStatus::Failed {
+                    if status == crate::models::TaskStatus::Merged
+                        || status == crate::models::TaskStatus::Failed
+                    {
                         tasks.remove(selected);
                     }
                 }
