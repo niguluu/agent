@@ -546,7 +546,7 @@ pub async fn summarize_task_result(worktree_path: &str, prompt: &str) -> String 
 
 pub fn build_agent_prompt(prompt: &str, guidelines_path: &str) -> String {
     format!(
-        "user prompt: {}\nfollow the guidelines in {}\nkeep the final task result short simple and direct",
+        "user prompt: {}\nfollow the guidelines in {}\nkeep any file tree short and focused\nkeep the final task result short simple and direct",
         prompt.trim(),
         guidelines_path
     )
@@ -562,4 +562,25 @@ pub fn ensure_guidelines_file(path: &str) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_agent_prompt;
+
+    #[test]
+    fn build_agent_prompt_keeps_file_tree_short() {
+        let prompt = build_agent_prompt("trim the file tree", ".junie/AGENTS.md");
+
+        assert!(prompt.contains("keep any file tree short and focused"));
+    }
+
+    #[test]
+    fn build_agent_prompt_keeps_old_rules() {
+        let prompt = build_agent_prompt("trim the file tree", ".junie/AGENTS.md");
+
+        assert!(prompt.contains("user prompt: trim the file tree"));
+        assert!(prompt.contains("follow the guidelines in .junie/AGENTS.md"));
+        assert!(prompt.contains("keep the final task result short simple and direct"));
+    }
 }
