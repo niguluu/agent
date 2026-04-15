@@ -64,10 +64,8 @@ pub async fn bootstrap_existing_tasks(app: Arc<Mutex<App>>) {
         }
     }
 
-    let tasks_ref: SharedTasks = {
-        let app_ref = app.lock().await;
-        Arc::clone(&app_ref.tasks)
-    };
+    let tasks_ref: SharedTasks = Arc::clone(&app_state.tasks);
+    drop(app_state);
 
     let recovered_tasks = {
         let tasks = tasks_ref.lock().await;

@@ -1,4 +1,4 @@
-use crate::models::{AGENTS_BRANCH, GUIDELINES_PATH, SharedTasks, TaskStatus};
+use crate::models::{AGENTS_BRANCH, GUIDELINES_PATH, PSEUDOCODE_PATH, SharedTasks, TaskStatus};
 use std::{process::Stdio, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
@@ -76,22 +76,26 @@ pub async fn run_agent_task(
     }
 
     let guidelines_path = format!("{}/{}", worktree_path, GUIDELINES_PATH);
-    if ensure_guidelines_file(&guidelines_path).is_ok() {
+    let pseudocode_path = format!("{}/{}", worktree_path, PSEUDOCODE_PATH);
+    let guide_ready = ensure_guidelines_file(&guidelines_path).is_ok();
+    let pseudocode_ready = ensure_pseudocode_file(&pseudocode_path).is_ok();
+
+    if guide_ready && pseudocode_ready {
         set_task_result(&tasks_ref, id, "run with guide".to_string()).await;
         push_task_log(
             &tasks_ref,
             id,
-            format!("Guide ready at {}", GUIDELINES_PATH),
+            format!("Guide ready at {} and {}", GUIDELINES_PATH, PSEUDOCODE_PATH),
         )
         .await;
     } else {
-        push_task_log(&tasks_ref, id, "Could not write guide file".to_string()).await;
+        push_task_log(&tasks_ref, id, "Could not write session guide files".to_string()).await;
     }
 
     push_task_log(&tasks_ref, id, "Spawning Junie agent...").await;
     set_task_result(&tasks_ref, id, "agent running".to_string()).await;
 
-    let final_prompt = build_agent_prompt(&prompt, GUIDELINES_PATH);
+    let final_prompt = build_agent_prompt(&prompt, GUIDELINES_PATH, PSEUDOCODE_PATH);
 
     let child = Command::new("junie")
         .arg(&final_prompt)

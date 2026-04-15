@@ -42,7 +42,9 @@ pub type SharedTasks = Arc<Mutex<Vec<Task>>>;
 pub const AGENTS_BRANCH: &str = "agents";
 
 pub const GUIDELINES_PATH: &str = ".junie/AGENTS.md";
-pub const GUIDELINES_TEXT: &str = "# agent rules\n\n- keep replies short\n- use short simple words\n- skip filler\n- skip heavy punctuation\n- say what changed\n- name touched files when useful\n";
+pub const GUIDELINES_TEXT: &str = "# agent rules\n\n- keep replies short\n- use short simple words\n- skip filler\n- skip heavy punctuation\n- say what changed\n- name touched files when useful\n- keep any file tree short and focused\n- prefer focused file checks over full repo tree dumps\n- never print huge file contents unless needed\n- if many files change list the key files first then count the rest\n- keep the final task result short simple and direct\n";
+pub const PSEUDOCODE_PATH: &str = ".junie/psudocode.yaml";
+pub const PSEUDOCODE_TEXT: &str = "version: 1\nstyle:\n  replies:\n    - keep replies short\n    - use short simple words\n    - skip filler\n    - skip heavy punctuation\n    - say what changed\n    - name touched files when useful\nflow:\n  - read the task first\n  - make a short plan\n  - keep changes small\n  - reuse the patch pattern when it fits\n  - focus on implementation details that keep code simple\noutput:\n  final:\n    - say what changed\n    - name touched files\n    - keep the result direct\n";
 
 #[cfg(test)]
 mod tests {

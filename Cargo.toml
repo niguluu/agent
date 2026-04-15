@@ -6,6 +6,7 @@ description = "Small TUI app to run Junie tasks in git worktrees"
 readme = "README.md"
 
 [dependencies]
+arboard = "3.6.1"
 crossterm = "0.29.0"
 futures = "0.3.32"
 notify = "8.2.0"

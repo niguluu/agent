@@ -1,7 +1,7 @@
 use super::store::set_task_diff;
 use super::text_utils::{pretty_diff_output, short_prompt};
 use crate::models::SharedTasks;
-use crate::models::{AGENTS_BRANCH, GUIDELINES_TEXT};
+use crate::models::{AGENTS_BRANCH, GUIDELINES_TEXT, PSEUDOCODE_TEXT};
 use std::{
     collections::HashSet,
     io,
@@ -568,43 +568,92 @@ pub async fn summarize_task_result(worktree_path: &str, prompt: &str) -> String 
     }
 }
 
-pub fn build_agent_prompt(prompt: &str, guidelines_path: &str) -> String {
+pub fn build_agent_prompt(prompt: &str, guidelines_path: &str, pseudocode_path: &str) -> String {
     format!(
-        "user prompt: {}\nfollow the guidelines in {}\nkeep any file tree short and focused\nkeep the final task result short simple and direct",
+        "user prompt: {}\nfollow the guidelines in {}\nread the shared flow in {}\nkeep any file tree short and focused\nprefer focused file checks over full repo tree dumps\nnever print huge file contents unless needed\nif many files change list the key files first then count the rest\nkeep the final task result short simple and direct",
         prompt.trim(),
-        guidelines_path
+        guidelines_path,
+        pseudocode_path
     )
 }
 
-pub fn ensure_guidelines_file(path: &str) -> io::Result<()> {
+pub fn ensure_session_file(path: &str, text: &str) -> io::Result<()> {
     if let Some(parent) = Path::new(path).parent() {
         std::fs::create_dir_all(parent)?;
     }
 
     if !Path::new(path).exists() {
-        std::fs::write(path, GUIDELINES_TEXT)?;
+        std::fs::write(path, text)?;
     }
 
     Ok(())
 }
 
+pub fn ensure_guidelines_file(path: &str) -> io::Result<()> {
+    ensure_session_file(path, GUIDELINES_TEXT)
+}
+
+pub fn ensure_pseudocode_file(path: &str) -> io::Result<()> {
+    ensure_session_file(path, PSEUDOCODE_TEXT)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::build_agent_prompt;
+    use super::{build_agent_prompt, ensure_pseudocode_file};
+    use std::{fs, time::{SystemTime, UNIX_EPOCH}};
 
     #[test]
     fn build_agent_prompt_keeps_file_tree_short() {
-        let prompt = build_agent_prompt("trim the file tree", ".junie/AGENTS.md");
+        let prompt = build_agent_prompt(
+            "trim the file tree",
+            ".junie/AGENTS.md",
+            ".junie/psudocode.yaml",
+        );
 
         assert!(prompt.contains("keep any file tree short and focused"));
     }
 
     #[test]
     fn build_agent_prompt_keeps_old_rules() {
-        let prompt = build_agent_prompt("trim the file tree", ".junie/AGENTS.md");
+        let prompt = build_agent_prompt(
+            "trim the file tree",
+            ".junie/AGENTS.md",
+            ".junie/psudocode.yaml",
+        );
 
         assert!(prompt.contains("user prompt: trim the file tree"));
         assert!(prompt.contains("follow the guidelines in .junie/AGENTS.md"));
+        assert!(prompt.contains("read the shared flow in .junie/psudocode.yaml"));
         assert!(prompt.contains("keep the final task result short simple and direct"));
+    }
+
+    #[test]
+    fn build_agent_prompt_adds_focused_file_rules() {
+        let prompt = build_agent_prompt(
+            "trim the file tree",
+            ".junie/AGENTS.md",
+            ".junie/psudocode.yaml",
+        );
+
+        assert!(prompt.contains("prefer focused file checks over full repo tree dumps"));
+        assert!(prompt.contains("never print huge file contents unless needed"));
+        assert!(prompt.contains("list the key files first then count the rest"));
+    }
+
+    #[test]
+    fn ensure_pseudocode_file_writes_default_text() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("junie-pseudocode-test-{unique}"));
+        let path = root.join(".junie/psudocode.yaml");
+
+        ensure_pseudocode_file(path.to_str().unwrap()).unwrap();
+
+        let saved = fs::read_to_string(&path).unwrap();
+        assert!(saved.contains("reuse the patch pattern when it fits"));
+
+        let _ = fs::remove_dir_all(root);
     }
 }

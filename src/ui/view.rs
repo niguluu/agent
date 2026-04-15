@@ -12,6 +12,10 @@ use ratatui::{
 };
 
 pub fn render(frame: &mut Frame, app: &App, tasks: &[Task]) {
+    let panel_style = Style::default().fg(Color::Gray);
+    let title_style = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+    let status_style = Style::default().fg(Color::White);
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
@@ -23,12 +27,12 @@ pub fn render(frame: &mut Frame, app: &App, tasks: &[Task]) {
         .split(frame.area());
 
     let title = Paragraph::new("Agent")
-        .style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .block(Block::default().borders(Borders::ALL));
+        .style(title_style)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(panel_style),
+        );
     frame.render_widget(title, chunks[0]);
 
     let main_chunks = Layout::default()
@@ -42,7 +46,13 @@ pub fn render(frame: &mut Frame, app: &App, tasks: &[Task]) {
         .map(|(index, task)| build_task_item(index, task, app.selected_task))
         .collect();
 
-    let tasks_list = List::new(items).block(Block::default().borders(Borders::ALL).title("Tasks"));
+    let tasks_list = List::new(items).style(status_style).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Tasks")
+            .title_style(title_style)
+            .border_style(panel_style),
+    );
     frame.render_widget(tasks_list, main_chunks[0]);
 
     let right_chunks = Layout::default()
@@ -53,7 +63,14 @@ pub fn render(frame: &mut Frame, app: &App, tasks: &[Task]) {
     let (logs_text, diff_text, status_msg) = current_task_view(app, tasks);
 
     let logs_panel = Paragraph::new(logs_text)
-        .block(Block::default().borders(Borders::ALL).title("Agent Logs"))
+        .style(status_style)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Agent Logs")
+                .title_style(title_style)
+                .border_style(panel_style),
+        )
         .wrap(Wrap { trim: true });
     frame.render_widget(logs_panel, right_chunks[0]);
 
@@ -61,7 +78,9 @@ pub fn render(frame: &mut Frame, app: &App, tasks: &[Task]) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Live Diff / File Watcher"),
+                .title("Live Diff / File Watcher")
+                .title_style(title_style)
+                .border_style(panel_style),
         )
         .style(Style::default().fg(Color::Green))
         .wrap(Wrap { trim: true });
@@ -71,18 +90,31 @@ pub fn render(frame: &mut Frame, app: &App, tasks: &[Task]) {
         AppMode::Normal => {
             let msg = app.error_message.as_deref().unwrap_or(status_msg);
             let footer = Paragraph::new(format!(
-                "{msg} | (n) New | (y) Clear Done | (q) Quit | (j/k) Move"
+                "{msg} | (n) New | (y) Clear Done | (ctrl+shift+c) Copy | (q ctrl+c) Quit | (j/k) Move"
             ))
-            .block(Block::default().borders(Borders::ALL).title("Status"));
+            .style(status_style)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Status")
+                    .title_style(title_style)
+                    .border_style(panel_style),
+            );
             frame.render_widget(footer, chunks[2]);
         }
         AppMode::Input => {
             let input_panel = Paragraph::new(format!(
-                "> {}",
+                "> {}\n\nPaste with ctrl+v or shift+insert. Enter sends. Esc leaves. Ctrl+c quits.",
                 visible_prompt_input(&app.input, chunks[2].width)
             ))
             .style(Style::default().fg(Color::Yellow))
-            .block(Block::default().borders(Borders::ALL).title("Prompt"));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Prompt")
+                    .title_style(title_style)
+                    .border_style(panel_style),
+            );
             frame.render_widget(input_panel, chunks[2]);
         }
     }

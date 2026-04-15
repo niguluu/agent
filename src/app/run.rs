@@ -1,4 +1,7 @@
-use crate::{app::input::handle_key_event, ui::render};
+use crate::{
+    app::input::{handle_key_event, handle_paste},
+    ui::render,
+};
 use crossterm::event::{self, Event};
 use ratatui::{Terminal, backend::Backend};
 use std::{
@@ -31,12 +34,22 @@ where
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
-        if event::poll(timeout)?
-            && let Event::Key(key) = event::read()?
-        {
-            let mut app_state = app.lock().await;
-            if handle_key_event(&mut app_state, key).await {
-                return Ok(());
+        if event::poll(timeout)? {
+            match event::read()? {
+                Event::Key(key) => {
+                    let mut app_state = app.lock().await;
+                    if handle_key_event(&mut app_state, key).await {
+                        return Ok(());
+                    }
+                }
+                Event::Paste(text) => {
+                    let mut app_state = app.lock().await;
+                    handle_paste(&mut app_state, &text);
+                }
+                Event::Resize(_, _) => {
+                    terminal.clear()?;
+                }
+                _ => {}
             }
         }
 

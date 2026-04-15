@@ -6,11 +6,12 @@ mod ui;
 
 use app::{App, run_app};
 use runner::bootstrap_existing_tasks;
-use std::{error::Error, sync::Arc};
+use std::{error::Error, panic, sync::Arc};
 use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    install_terminal_panic_hook();
     let mut terminal = terminal::setup()?;
     let app = Arc::new(Mutex::new(App::new()));
 
@@ -26,4 +27,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+fn install_terminal_panic_hook() {
+    let hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic_info| {
+        let _ = terminal::force_restore();
+        hook(panic_info);
+    }));
 }
