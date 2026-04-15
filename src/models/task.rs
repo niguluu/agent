@@ -42,11 +42,11 @@ pub type SharedTasks = Arc<Mutex<Vec<Task>>>;
 pub const AGENTS_BRANCH: &str = "agents";
 
 pub const GUIDELINES_PATH: &str = ".junie/AGENTS.md";
-pub const GUIDELINES_TEXT: &str = "# agent rules\n\n- keep replies short\n- use short simple words\n- skip filler\n- skip heavy punctuation\n- say what changed\n- name touched files when useful\n";
+pub const GUIDELINES_TEXT: &str = "# agent rules\n\n- keep replies short\n- use short simple words\n- skip filler\n- skip heavy punctuation\n- say what changed\n- name touched files when useful\n- keep file trees short and focused\n- prefer focused file checks over full repo tree dumps\n- never print huge file contents unless needed\n- if many files change list the key files first then count the rest\n";
 
 #[cfg(test)]
 mod tests {
-    use super::{Task, TaskStatus};
+    use super::{GUIDELINES_TEXT, Task, TaskStatus};
 
     #[test]
     fn new_task_sets_defaults() {
@@ -59,5 +59,12 @@ mod tests {
         assert_eq!(task.status, TaskStatus::Pending);
         assert_eq!(task.logs, vec!["Queued: ship it"]);
         assert!(task.diff.is_empty());
+    }
+
+    #[test]
+    fn guidelines_text_keeps_tree_output_small() {
+        assert!(GUIDELINES_TEXT.contains("keep file trees short and focused"));
+        assert!(GUIDELINES_TEXT.contains("prefer focused file checks over full repo tree dumps"));
+        assert!(GUIDELINES_TEXT.contains("never print huge file contents unless needed"));
     }
 }

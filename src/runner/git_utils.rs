@@ -570,7 +570,7 @@ pub async fn summarize_task_result(worktree_path: &str, prompt: &str) -> String 
 
 pub fn build_agent_prompt(prompt: &str, guidelines_path: &str) -> String {
     format!(
-        "user prompt: {}\nfollow the guidelines in {}\nkeep any file tree short and focused\nkeep the final task result short simple and direct",
+        "user prompt: {}\nfollow the guidelines in {}\nkeep any file tree short and focused\nprefer focused file checks over full repo tree dumps\nnever print huge file contents unless needed\nif many files change list the key files first then count the rest\nkeep the final task result short simple and direct",
         prompt.trim(),
         guidelines_path
     )
@@ -606,5 +606,21 @@ mod tests {
         assert!(prompt.contains("user prompt: trim the file tree"));
         assert!(prompt.contains("follow the guidelines in .junie/AGENTS.md"));
         assert!(prompt.contains("keep the final task result short simple and direct"));
+    }
+
+    #[test]
+    fn build_agent_prompt_adds_focused_file_rules() {
+        let prompt = build_agent_prompt("trim the file tree", ".junie/AGENTS.md");
+
+        assert!(prompt.contains("prefer focused file checks over full repo tree dumps"));
+        assert!(prompt.contains("never print huge file contents unless needed"));
+        assert!(prompt.contains("list the key files first then count the rest"));
+    }
+
+    #[test]
+    fn build_agent_prompt_trims_user_prompt_text() {
+        let prompt = build_agent_prompt("  trim the file tree  ", ".junie/AGENTS.md");
+
+        assert!(prompt.contains("user prompt: trim the file tree\n"));
     }
 }
