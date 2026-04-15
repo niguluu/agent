@@ -24,7 +24,7 @@ This keeps your main working tree clean while agents work in parallel.
 2. The orchestrator spins up a new Git worktree and a branch for the task.
 3. The app makes sure the shared `agents` branch exists.
 4. The app writes `.junie/AGENTS.md` inside the task worktree.
-5. A headless `junie` CLI process is spawned inside that worktree with your prompt, the guide path, and the short output rules.
+5. A headless `junie` CLI process is spawned inside that worktree with your prompt, the guide path, and focused file rules that avoid huge tree dumps and huge file output.
 6. The TUI streams the agent's stdout and stderr and polls `git diff` to show what changes the agent is making.
 7. When the agent completes the task, the orchestrator auto merges the changes into `agents` and then into your current branch.
 8. Press `y` on a merged or failed item to clear it from the list.
@@ -108,7 +108,7 @@ Each task moves through this flow:
 2. You type a prompt and press `Enter`
 3. The app creates a new worktree and branch from `agents`
 4. The app writes `.junie/AGENTS.md` in that worktree
-5. The app starts `junie` in that worktree with your prompt plus the guide path and short output rules
+5. The app starts `junie` in that worktree with your prompt plus the guide path and focused file rules that keep tree and file output small
 6. The app streams logs and updates the diff view
 7. When the agent completes, the orchestrator auto merges the task into `agents` and then into your current branch
 8. Press `y` to clear a merged or failed task from the list
