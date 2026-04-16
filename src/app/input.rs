@@ -51,17 +51,18 @@ async fn handle_normal_mode(app_state: &mut App, key: KeyEvent) -> bool {
         KeyCode::Char('y') => {
             let selected = app_state.selected_task;
             let tasks_ref = Arc::clone(&app_state.tasks);
-            tokio::spawn(async move {
-                let mut tasks = tasks_ref.lock().await;
-                if selected < tasks.len() {
-                    let status = tasks[selected].status.clone();
-                    if status == crate::models::TaskStatus::Merged
-                        || status == crate::models::TaskStatus::Failed
-                    {
-                        tasks.remove(selected);
-                    }
+            let mut tasks = tasks_ref.lock().await;
+            if selected < tasks.len() {
+                let status = tasks[selected].status.clone();
+                if status == crate::models::TaskStatus::Merged
+                    || status == crate::models::TaskStatus::Failed
+                {
+                    tasks.remove(selected);
+                    let new_len = tasks.len();
+                    drop(tasks);
+                    app_state.clamp_selection(new_len);
                 }
-            });
+            }
             false
         }
         _ => false,
