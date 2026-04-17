@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod git_utils;
 pub mod merge;
+pub mod overlay;
 pub mod recovery;
 mod store;
 pub mod text_utils;

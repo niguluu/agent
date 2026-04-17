@@ -402,6 +402,25 @@ async fn merge_task_branch_to_agents(
     }
 }
 
+async fn push_branch(repo_root: &str, branch: &str) -> Result<(), String> {
+    let out = Command::new("git")
+        .args(["push", "origin", branch])
+        .current_dir(repo_root)
+        .output()
+        .await
+        .map_err(|err| format!("git push failed {}", err))?;
+
+    if !out.status.success() {
+        return Err(format!(
+            "push {} failed {}",
+            branch,
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+
+    Ok(())
+}
+
 async fn merge_agents_to_main() -> Result<String, String> {
     let repo_root = repo_root().await?;
     ensure_agents_branch(&repo_root).await?;
@@ -412,7 +431,11 @@ async fn merge_agents_to_main() -> Result<String, String> {
 
 pub async fn auto_merge_task(branch_name: &str, worktree_path: &str) -> Result<String, String> {
     let task_summary = merge_task_branch_to_agents(branch_name, worktree_path).await?;
-    Ok(task_summary)
+    let repo_root = repo_root().await?;
+    push_branch(&repo_root, AGENTS_BRANCH).await?;
+    let main_summary = merge_agents_to_main().await?;
+    push_branch(&repo_root, &pick_merge_branch(&repo_root).await?).await?;
+    Ok(format!("{} {} pushed", task_summary, main_summary))
 }
 
 pub async fn worktree_is_dirty(worktree_path: &str) -> Result<bool, String> {
@@ -594,6 +617,54 @@ pub fn ensure_guidelines_file(path: &str) -> io::Result<()> {
 
 pub fn ensure_pseudocode_file(path: &str) -> io::Result<()> {
     ensure_session_file(path, PSEUDOCODE_TEXT)
+}
+
+/// bundle a branch out of an overlay checkout and fetch it into the real repo.
+/// needed because commits made inside an overlayfs mount live in the upper
+/// dir and vanish on unmount unless we pull them out first.
+pub async fn export_overlay_branch(
+    overlay_dir: &str,
+    repo_root: &str,
+    branch: &str,
+) -> Result<(), String> {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let bundle_path = format!("{}/.git/agent-overlay-{}-{}.bundle", repo_root, branch, stamp);
+
+    let make = Command::new("git")
+        .args(["bundle", "create", &bundle_path, branch])
+        .current_dir(overlay_dir)
+        .output()
+        .await
+        .map_err(|err| format!("bundle spawn failed {}", err))?;
+
+    if !make.status.success() {
+        return Err(format!(
+            "bundle create failed: {}",
+            String::from_utf8_lossy(&make.stderr).trim()
+        ));
+    }
+
+    let refspec = format!("{0}:{0}", branch);
+    let fetch = Command::new("git")
+        .args(["fetch", &bundle_path, &refspec])
+        .current_dir(repo_root)
+        .output()
+        .await
+        .map_err(|err| format!("fetch spawn failed {}", err))?;
+
+    let _ = std::fs::remove_file(&bundle_path);
+
+    if !fetch.status.success() {
+        return Err(format!(
+            "bundle fetch failed: {}",
+            String::from_utf8_lossy(&fetch.stderr).trim()
+        ));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

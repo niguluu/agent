@@ -6,6 +6,7 @@ use tokio::{
 };
 
 use super::git_utils::*;
+use super::overlay::{self, OverlayPaths};
 use super::store::{
     push_task_log, push_task_output, set_task_diff, set_task_result, set_task_status,
 };
@@ -20,12 +21,12 @@ pub async fn run_agent_task(
 ) {
     set_task_status(&tasks_ref, id, TaskStatus::Running).await;
     set_task_result(&tasks_ref, id, "starting".to_string()).await;
-    push_task_log(
-        &tasks_ref,
-        id,
-        format!("Adding worktree at {worktree_path} with branch {branch_name}"),
-    )
-    .await;
+    let start_msg = if overlay::is_enabled() {
+        format!("starting overlay sandbox at {worktree_path} on branch {branch_name}")
+    } else {
+        format!("starting worktree at {worktree_path} on branch {branch_name}")
+    };
+    push_task_log(&tasks_ref, id, start_msg).await;
 
     let repo_root = match repo_root().await {
         Ok(path) => path,
@@ -42,36 +43,97 @@ pub async fn run_agent_task(
         return;
     }
 
-    let worktree_add = Command::new("git")
-        .args([
-            "worktree",
-            "add",
-            "-b",
-            &branch_name,
-            &worktree_path,
-            AGENTS_BRANCH,
-        ])
-        .output()
-        .await;
-
-    match worktree_add {
-        Ok(out) if out.status.success() => {}
-        Ok(out) => {
-            push_task_log(&tasks_ref, id, "Failed to add worktree").await;
-            push_task_log(
-                &tasks_ref,
-                id,
-                String::from_utf8_lossy(&out.stderr).into_owned(),
-            )
-            .await;
-            set_task_status(&tasks_ref, id, TaskStatus::Failed).await;
-            return;
+    // try overlayfs sandbox first when enabled; fall back to git worktree
+    let overlay_paths = if overlay::is_enabled() {
+        let paths = OverlayPaths::for_task(&repo_root, id, &worktree_path);
+        match overlay::mount_overlay(&paths).await {
+            Ok(()) => {
+                push_task_log(
+                    &tasks_ref,
+                    id,
+                    format!("overlayfs mounted at {}", paths.merged),
+                )
+                .await;
+                // start the task branch from inside the overlay so commits
+                // land in the upper dir, not the real repo
+                let checkout = Command::new("git")
+                    .args(["checkout", "-b", &branch_name, AGENTS_BRANCH])
+                    .current_dir(&paths.merged)
+                    .output()
+                    .await;
+                match checkout {
+                    Ok(out) if out.status.success() => Some(paths),
+                    Ok(out) => {
+                        push_task_log(
+                            &tasks_ref,
+                            id,
+                            format!(
+                                "overlay checkout failed: {}",
+                                String::from_utf8_lossy(&out.stderr).trim()
+                            ),
+                        )
+                        .await;
+                        let _ = overlay::unmount_overlay(&paths).await;
+                        overlay::drop_scratch(&paths).await;
+                        set_task_status(&tasks_ref, id, TaskStatus::Failed).await;
+                        return;
+                    }
+                    Err(err) => {
+                        push_task_log(&tasks_ref, id, format!("overlay checkout spawn failed {}", err)).await;
+                        let _ = overlay::unmount_overlay(&paths).await;
+                        overlay::drop_scratch(&paths).await;
+                        set_task_status(&tasks_ref, id, TaskStatus::Failed).await;
+                        return;
+                    }
+                }
+            }
+            Err(err) => {
+                push_task_log(
+                    &tasks_ref,
+                    id,
+                    format!("overlay mount failed, falling back to worktree: {}", err),
+                )
+                .await;
+                overlay::drop_scratch(&paths).await;
+                None
+            }
         }
-        Err(err) => {
-            push_task_log(&tasks_ref, id, "Failed to execute git command").await;
-            push_task_log(&tasks_ref, id, err.to_string()).await;
-            set_task_status(&tasks_ref, id, TaskStatus::Failed).await;
-            return;
+    } else {
+        None
+    };
+
+    if overlay_paths.is_none() {
+        let worktree_add = Command::new("git")
+            .args([
+                "worktree",
+                "add",
+                "-b",
+                &branch_name,
+                &worktree_path,
+                AGENTS_BRANCH,
+            ])
+            .output()
+            .await;
+
+        match worktree_add {
+            Ok(out) if out.status.success() => {}
+            Ok(out) => {
+                push_task_log(&tasks_ref, id, "failed to create sandbox").await;
+                push_task_log(
+                    &tasks_ref,
+                    id,
+                    String::from_utf8_lossy(&out.stderr).into_owned(),
+                )
+                .await;
+                set_task_status(&tasks_ref, id, TaskStatus::Failed).await;
+                return;
+            }
+            Err(err) => {
+                push_task_log(&tasks_ref, id, "failed to spawn sandbox").await;
+                push_task_log(&tasks_ref, id, err.to_string()).await;
+                set_task_status(&tasks_ref, id, TaskStatus::Failed).await;
+                return;
+            }
         }
     }
 
@@ -165,6 +227,45 @@ pub async fn run_agent_task(
     let _ = stderr_loop.await;
 
     refresh_diff(&worktree_path, id, &tasks_ref).await;
+
+    // if the agent ran inside an overlay, ship its branch back to the real
+    // repo via a git bundle, then tear the overlay down so merge/diff code
+    // can keep pretending it was a normal worktree all along.
+    if let Some(paths) = &overlay_paths {
+        if let Err(err) = export_overlay_branch(&paths.merged, &repo_root, &branch_name).await {
+            push_task_log(&tasks_ref, id, format!("overlay export failed {}", err)).await;
+            let _ = overlay::unmount_overlay(paths).await;
+            overlay::drop_scratch(paths).await;
+            set_task_status(&tasks_ref, id, TaskStatus::Failed).await;
+            return;
+        }
+        if let Err(err) = overlay::unmount_overlay(paths).await {
+            push_task_log(&tasks_ref, id, format!("overlay unmount warn {}", err)).await;
+        }
+        overlay::drop_scratch(paths).await;
+        // make a plain worktree on the exported branch so the existing
+        // merge/diff pipeline works unchanged
+        let wt = Command::new("git")
+            .args(["worktree", "add", &worktree_path, &branch_name])
+            .current_dir(&repo_root)
+            .output()
+            .await;
+        if let Ok(out) = &wt {
+            if !out.status.success() {
+                push_task_log(
+                    &tasks_ref,
+                    id,
+                    format!(
+                        "post-overlay worktree add failed: {}",
+                        String::from_utf8_lossy(&out.stderr).trim()
+                    ),
+                )
+                .await;
+                set_task_status(&tasks_ref, id, TaskStatus::Failed).await;
+                return;
+            }
+        }
+    }
 
     match status {
         Ok(exit) if exit.success() => {

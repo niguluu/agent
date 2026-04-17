@@ -58,27 +58,58 @@ good when the agent runs shell or build steps that may break the host
 
 needs the team to adopt `jj` or `sl`
 
-## suggested direction
+## the real setup
 
-blend 1 and 2:
+no orchestrator here. this is many junie headless agents running wild in parallel on the same repo. no central writer, no patch queue, no human in the loop serializing merges.
 
-1. spawn agent in an overlay mount of the repo
-2. on finish, run `git diff` against the base
-3. apply the patch to the real repo with `--3way`
-4. drop the overlay
+that changes the problem. we can't "just return diffs to the orchestrator" because there is no orchestrator. each agent has to be able to:
 
-gains
+- read a consistent view of the code
+- write freely without corrupting another agent's run
+- land its work somewhere that won't get trampled
 
-- one real repo, one real branch
-- no worktree cleanup
-- fast start, cheap parallel tasks
-- conflicts surface in one place
+so isolation is not optional, it's the whole point. the 5 options above are not overkill, they are the actual menu.
 
-keep option 4 for tasks that need to run untrusted code
+## suggested direction for wild agents
+
+default: overlayfs per agent (option 1)
+
+- each headless junie boots into its own overlay mount of the repo
+- lower = shared read only repo, upper = agent's scratch
+- agent does whatever it wants in there, including builds and tests
+- on finish, diff the upper dir and commit to its own branch (or just leave the diff as the artifact)
+- crash = drop the upper dir, no cleanup of worktrees needed
+
+why this fits a no orchestrator world:
+
+- no shared writer to bottleneck on
+- no "apply patch to main" step that needs a referee
+- agents land on their own branches, merging is a later/human problem
+- near zero startup cost so spawning N junies stays cheap
+
+escalate per agent when needed:
+
+| swap in | when that agent needs |
+|---|---|
+| 4 containers | to run untrusted shell or network stuff safely |
+| 3 btrfs or zfs snapshot | you already run a cow fs and want even cheaper clones |
+| 5 jj or sapling | you want stacked commits instead of branch soup |
+
+patch only flow (option 2) is still fine for agents that don't need to execute anything, but it's not the default anymore since most junie tasks do want to run code.
+
+## what we're explicitly not doing
+
+- no central orchestrator applying patches to `main`
+- no serialized merge queue
+- no shared `agents` branch
+- no assumption that one writer resolves conflicts
+
+conflicts between agents are resolved later, by whoever merges the branches, not during the run.
 
 ## next steps
 
-- prototype overlay mount helper in `src`
-- swap worktree setup for overlay setup
-- replace branch merge with `git apply --3way`
-- keep the current ui, only the backend changes
+- ship an overlay mount helper that junie headless can call on startup
+- give each agent a unique upper dir and its own branch name
+- on exit, commit the overlay diff to that branch and unmount
+- add container mode as an opt in for agents that run untrusted code
+- leave merging of agent branches to humans or a later pass, not the runtime

@@ -37,6 +37,23 @@ This keeps your main working tree clean while agents work in parallel.
 
 Start the app from inside a Git repo.
 
+## Overlayfs sandbox (opt in)
+
+By default each task gets its own `git worktree`. You can switch to an overlayfs sandbox per agent (see `docs/beyond-git-worktrees`):
+
+```bash
+JUNIE_OVERLAY=1 cargo run
+```
+
+When enabled:
+
+- Each agent runs in an overlay mount, lower = repo root (read only), upper = `../agent-overlay-<id>/upper`.
+- The task branch is created inside the overlay so commits land in the upper dir.
+- On finish, the branch is bundled out into the real repo, the overlay is unmounted, and a normal worktree is created so the existing merge and diff flow works unchanged.
+- If the mount fails (no sudo, no overlayfs, non-linux), the app falls back to the plain worktree path.
+
+Requires Linux and passwordless `sudo mount -t overlay` / `sudo umount`.
+
 ## Run
 
 ```bash
