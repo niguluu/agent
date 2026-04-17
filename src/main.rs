@@ -1,4 +1,5 @@
 mod app;
+mod cli;
 mod models;
 mod runner;
 mod terminal;
@@ -6,12 +7,18 @@ mod ui;
 
 use app::{App, run_app};
 use runner::bootstrap_existing_tasks;
-use std::{error::Error, panic, sync::Arc};
+use std::{env, error::Error, panic, process, sync::Arc};
 use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     install_terminal_panic_hook();
+
+    let args: Vec<String> = env::args().collect();
+    match cli::parse(&args) {
+        cli::Action::RunApp => {}
+        cli::Action::Exit(code) => process::exit(code),
+    }
     let mut terminal = terminal::setup()?;
     let app = Arc::new(Mutex::new(App::new()));
 
