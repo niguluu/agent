@@ -402,6 +402,7 @@ async fn merge_task_branch_to_agents(
     }
 }
 
+#[allow(dead_code)]
 async fn push_branch(repo_root: &str, branch: &str) -> Result<(), String> {
     let out = Command::new("git")
         .args(["push", "origin", branch])
@@ -431,11 +432,8 @@ async fn merge_agents_to_main() -> Result<String, String> {
 
 pub async fn auto_merge_task(branch_name: &str, worktree_path: &str) -> Result<String, String> {
     let task_summary = merge_task_branch_to_agents(branch_name, worktree_path).await?;
-    let repo_root = repo_root().await?;
-    push_branch(&repo_root, AGENTS_BRANCH).await?;
     let main_summary = merge_agents_to_main().await?;
-    push_branch(&repo_root, &pick_merge_branch(&repo_root).await?).await?;
-    Ok(format!("{} {} pushed", task_summary, main_summary))
+    Ok(format!("{} {} (local only)", task_summary, main_summary))
 }
 
 pub async fn worktree_is_dirty(worktree_path: &str) -> Result<bool, String> {
