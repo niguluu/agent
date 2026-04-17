@@ -1,20 +1,17 @@
-version: 1
+version: 2
 style:
-  replies:
-    - keep replies short
-    - use short simple words
-    - skip filler
-    - skip heavy punctuation
-    - say what changed
-    - name touched files when useful
+  source: .junie/AGENTS.md
 flow:
   - read the task first
   - make a short plan
   - keep changes small
   - reuse the patch pattern when it fits
+  - prefer focused file checks over full repo tree dumps
+  - never print huge file contents unless needed
   - focus on implementation details that keep code simple
 output:
   final:
     - say what changed
     - name touched files
+    - if many files change list the key files first then count the rest
     - keep the result direct
