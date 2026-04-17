@@ -35,13 +35,3 @@ pub fn pretty_diff_output(diff: &str) -> String {
     }
 }
 
-pub fn task_status_text(status: &crate::models::TaskStatus) -> &'static str {
-    use crate::models::TaskStatus;
-    match status {
-        TaskStatus::Pending => "waiting",
-        TaskStatus::Running => "running",
-        TaskStatus::Merging => "merging",
-        TaskStatus::Merged => "merged",
-        TaskStatus::Failed => "failed",
-    }
-}

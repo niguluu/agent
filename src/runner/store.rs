@@ -46,9 +46,3 @@ pub async fn get_task_status(tasks_ref: &SharedTasks, id: usize) -> Option<TaskS
         .map(|task| task.status.clone())
 }
 
-pub async fn start_merge(
-    tasks_ref: &SharedTasks,
-    _selected: usize,
-) -> Option<(usize, String, String)> {
-    None
-}
