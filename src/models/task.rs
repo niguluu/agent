@@ -42,9 +42,9 @@ pub type SharedTasks = Arc<Mutex<Vec<Task>>>;
 pub const AGENTS_BRANCH: &str = "agents";
 
 pub const GUIDELINES_PATH: &str = ".junie/AGENTS.md";
-pub const GUIDELINES_TEXT: &str = "# agent rules\n\n- keep replies short\n- use short simple words\n- skip filler\n- skip heavy punctuation\n- say what changed\n- name touched files when useful\n- keep any file tree short and focused\n- prefer focused file checks over full repo tree dumps\n- never print huge file contents unless needed\n- if many files change list the key files first then count the rest\n- keep the final task result short simple and direct\n";
+pub const GUIDELINES_TEXT: &str = "# agent rules\n\n- keep replies short\n- use short simple words\n- skip filler\n- skip heavy punctuation\n- say what changed\n- name touched files when useful\n- keep any file tree short and focused\n- prefer focused file checks over full repo tree dumps\n- never print huge file contents unless needed\n- if many files change list the key files first then count the rest\n- keep the final task result short simple and direct\n- commit changes locally only\n- never run git push or push to any remote\n- do not pull or fetch from remote\n- all work stays on the local branch for the orchestrator to merge\n";
 pub const PSEUDOCODE_PATH: &str = ".junie/psudocode.yaml";
-pub const PSEUDOCODE_TEXT: &str = "version: 1\nstyle:\n  replies:\n    - keep replies short\n    - use short simple words\n    - skip filler\n    - skip heavy punctuation\n    - say what changed\n    - name touched files when useful\nflow:\n  - read the task first\n  - make a short plan\n  - keep changes small\n  - reuse the patch pattern when it fits\n  - focus on implementation details that keep code simple\noutput:\n  final:\n    - say what changed\n    - name touched files\n    - keep the result direct\n";
+pub const PSEUDOCODE_TEXT: &str = "version: 2\nstyle:\n  source: .junie/AGENTS.md\ngit:\n  local_only: true\n  never_push: true\n  never_pull: true\n  note: orchestrator handles merges locally; do not touch any remote\nflow:\n  - read the task first\n  - make a short plan\n  - keep changes small\n  - reuse the patch pattern when it fits\n  - focus on implementation details that keep code simple\n  - commit locally only, never push\noutput:\n  final:\n    - say what changed\n    - name touched files\n    - keep the result direct\n";
 
 #[cfg(test)]
 mod tests {
@@ -68,5 +68,11 @@ mod tests {
         assert!(GUIDELINES_TEXT.contains("keep any file tree short and focused"));
         assert!(GUIDELINES_TEXT.contains("prefer focused file checks over full repo tree dumps"));
         assert!(GUIDELINES_TEXT.contains("never print huge file contents unless needed"));
+    }
+
+    #[test]
+    fn guidelines_text_forbids_remote_push() {
+        assert!(GUIDELINES_TEXT.contains("commit changes locally only"));
+        assert!(GUIDELINES_TEXT.contains("never run git push"));
     }
 }

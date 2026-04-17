@@ -590,7 +590,7 @@ pub async fn summarize_task_result(worktree_path: &str, prompt: &str) -> String 
 
 pub fn build_agent_prompt(prompt: &str, guidelines_path: &str, pseudocode_path: &str) -> String {
     format!(
-        "user prompt: {}\nfollow the guidelines in {}\nread the shared flow in {}\nkeep any file tree short and focused\nprefer focused file checks over full repo tree dumps\nnever print huge file contents unless needed\nif many files change list the key files first then count the rest\nkeep the final task result short simple and direct",
+        "user prompt: {}\nfollow the guidelines in {}\nread the shared flow in {}\nkeep any file tree short and focused\nprefer focused file checks over full repo tree dumps\nnever print huge file contents unless needed\nif many files change list the key files first then count the rest\nkeep the final task result short simple and direct\ncommit locally only; never run git push or push to any remote\ndo not pull or fetch from remote; the orchestrator merges everything locally",
         prompt.trim(),
         guidelines_path,
         pseudocode_path
@@ -693,6 +693,8 @@ mod tests {
         assert!(prompt.contains("follow the guidelines in .junie/AGENTS.md"));
         assert!(prompt.contains("read the shared flow in .junie/psudocode.yaml"));
         assert!(prompt.contains("keep the final task result short simple and direct"));
+        assert!(prompt.contains("never run git push"));
+        assert!(prompt.contains("commit locally only"));
     }
 
     #[test]

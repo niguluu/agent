@@ -1,6 +1,11 @@
 version: 2
 style:
   source: .junie/AGENTS.md
+git:
+  local_only: true
+  never_push: true
+  never_pull: true
+  note: orchestrator handles merges locally; do not touch any remote
 flow:
   - read the task first
   - make a short plan
