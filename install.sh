@@ -1,10 +1,27 @@
 #!/usr/bin/env bash
 # Custom install script for junie -> `aj` command
+# Supports local run and `curl | bash` one-liner.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_URL="${REPO_URL:-https://github.com/niguluu/agent.git}"
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 CMD_NAME="${CMD_NAME:-aj}"
+
+# Detect if piped (no BASH_SOURCE file on disk) or missing Cargo.toml next to script.
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/Cargo.toml" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+  SRC_DIR="${SRC_DIR:-$HOME/.local/share/aj-src}"
+  if [ -d "$SRC_DIR/.git" ]; then
+    echo ">> updating $SRC_DIR"
+    git -C "$SRC_DIR" pull --ff-only
+  else
+    echo ">> cloning $REPO_URL -> $SRC_DIR"
+    mkdir -p "$(dirname "$SRC_DIR")"
+    git clone --depth 1 "$REPO_URL" "$SRC_DIR"
+  fi
+  SCRIPT_DIR="$SRC_DIR"
+fi
 
 echo ">> building release in $SCRIPT_DIR"
 cd "$SCRIPT_DIR"

@@ -54,6 +54,28 @@ When enabled:
 
 Requires Linux and passwordless `sudo mount -t overlay` / `sudo umount`.
 
+## Install
+
+One liner:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/niguluu/agent/main/install.sh | bash
+```
+
+This builds the release binary, symlinks it as `aj` in `~/.local/bin`, and adds that dir to your PATH. Then run `aj` from anywhere.
+
+Override defaults:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/niguluu/agent/main/install.sh | BIN_DIR=$HOME/bin CMD_NAME=aj bash
+```
+
+Or from a local clone:
+
+```bash
+./install.sh
+```
+
 ## Run
 
 ```bash
